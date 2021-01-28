@@ -123,7 +123,7 @@ class BotClient(discord.Client):
         # Receive help command
         elif len(cmdlist) == 2 and cmdlist[1] == "help":
             imsg = f"[INFO] コマンド仕様:"
-            imsg += f"\r・add <アカウント名>: 監視アカウントを登録"
+            imsg += f"\r・add <アカウント名>: 収集対象のアカウントを登録"
             imsg += f"\r・remove <アカウント名>: 登録済みのアカウントを削除"
             imsg += f"\r・list : 登録済みのアカウントの一覧表示"
             imsg += f"\r・help : コマンド仕様を表示"

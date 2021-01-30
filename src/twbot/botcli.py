@@ -11,95 +11,164 @@ logger = logging.getLogger(__name__)
 
 
 class TwListener(tweepy.StreamListener):
-    def __init__(self, loop, uid, channel, match_ptn=None):
+    def __init__(self, loop, writers):
         super().__init__()
+        wdict = {}
+        for w in writers.values():
+            if w.uid not in wdict:
+                wdict[w.uid] = []
+            wdict[w.uid].append(w)
+
         self.loop = loop
-        self.uid = uid
-        self.channel = channel
-        self.match_ptn = match_ptn
+        self.wdict = wdict
 
     def on_status(self, status):
         # Get new tweet
         # For some reason, get tweets of other users
-        if status.user.id != self.uid:
+        if status.user.id not in self.wdict:
             return
 
         # Format tweet
         expand_text = status.text
-        for e in status.entities['urls']:
-            expand_text = expand_text.replace(e['url'], e['display_url'])
-            
-        # Not matched
-        if self.match_ptn and not re.search(self.match_ptn, expand_text):
-            logger.debug("[DEBUG] status.text is not matched with regular expression")
-            return
+        for e in status.entities["urls"]:
+            expand_text = expand_text.replace(e["url"], e["display_url"])
 
-        url = f"https://twitter.com/{status.user.screen_name}/status/{status.id}"
-        future = asyncio.run_coroutine_threadsafe(self.channel.send(url), self.loop)
-        future.result()
+        for w in self.wdict[status.user.id]:
+            # Not matched
+            if w.match_ptn and not re.search(w.match_ptn, expand_text):
+                logger.debug(
+                    "[DEBUG] status.text is not matched with regular expression"
+                )
+                return
+
+            url = f"https://twitter.com/{status.user.screen_name}/status/{status.id}"
+            future = asyncio.run_coroutine_threadsafe(w.channel.send(url), self.loop)
+            future.result()
 
     def on_error(self, status):
         logger.error(status)
 
 
-class BotWriter:
-    def __init__(self, auth, screen_name, channel, match_ptn):
-        self.match_ptn = None
-        self.stream = None
-
-        loop = asyncio.get_event_loop()
-        api = tweepy.API(auth)
-
-        # Throw exception if the account is not exist
-        status = api.get_user(screen_name)
-        uid = status.id
-        stream = tweepy.Stream(
-            auth=auth, listener=TwListener(loop, uid, channel, match_ptn)
-        )
-        stream.filter(follow=[str(uid)], is_async=True)
-
+class Writer:
+    def __init__(self, channel, uid, match_ptn):
+        self.channel = channel
+        self.uid = uid
         self.match_ptn = match_ptn
-        self.stream = stream
+
+
+class BotWriter:
+    def __init__(self, auth):
+        self.loop = asyncio.get_event_loop()
+        self.auth = auth
+        self.api = tweepy.API(auth)
+        self.writers = {}
+        self.user_counts = {}
+        self.follows = []
+        self.stream = None
+        self.user_list = {}
 
     def __del__(self):
         if self.stream:
             self.stream.disconnect()
+
+    def add(self, channel, screen_name, match_ptn):
+        # Raise exception if the account is not exist
+        status = self.api.get_user(screen_name)
+        uid = status.id
+        cid = channel.id
+
+        # Check regular expression
+        if match_ptn:
+            try:
+                re.compile(match_ptn)
+            except:
+                logger.exception("[ERROR] Recieve Exception")
+                emsg = f"[ERROR] 正規表現が不正です (正規表現: {repr(match_ptn)})"
+                logger.error(emsg)
+                return
+
+        # Raise exception if the account is already registered
+        if (cid, screen_name) in self.writers:
+            raise ValueError(f"[ERROR] 既に登録されているツイッターアカウントです (アカウント名: {screen_name})")
+
+        self.writers[(cid, screen_name)] = Writer(channel, uid, match_ptn)
+        if screen_name not in self.user_counts:
+            self.user_counts[screen_name] = 0
+        self.user_counts[screen_name] += 1
+        if cid not in self.user_list:
+            self.user_list[cid] = []
+        self.user_list[cid].append(screen_name)
+
+        if str(uid) not in self.follows:
+            self.follows.append(str(uid))
+
+        # Reconstruct stream to run just one stream
+        if self.stream:
+            self.stream.disconnect()
+        self.stream = tweepy.Stream(
+            auth=self.auth, listener=TwListener(self.loop, self.writers)
+        )
+        self.stream.filter(follow=self.follows, is_async=True)
+
+    def remove(self, channel, screen_name):
+        # Raise exception if the account is not exist
+        cid = channel.id
+
+        # Raise exception if the account is already registered
+        if (cid, screen_name) not in self.writers:
+            raise ValueError(f"[ERROR] 登録されていないツイッターアカウントです (アカウント名: {screen_name})")
+
+        uid = self.writers[(cid, screen_name)].uid
+        self.writers.pop((cid, screen_name))
+        self.user_counts[screen_name] -= 1
+        if self.user_counts[screen_name] == 0:
+            self.follows.remove(str(uid))
+            self.user_counts.pop(screen_name)
+        self.user_list[cid].remove(screen_name)
+
+        # Reconstruct stream to run just one stream
+        if self.stream:
+            self.stream.disconnect()
+        self.stream = tweepy.Stream(
+            auth=self.auth, listener=TwListener(self.loop, self.writers)
+        )
+        self.stream.filter(follow=self.follows, is_async=True)
 
 
 class BotClient(discord.Client):
     def __init__(self, consumer_key, consumer_secret, access_token, access_secret):
         super().__init__()
         self.auth = None
-        self.writers = {}
-        self._called_on_ready = False
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.access_token = access_token
         self.access_secret = access_secret
+        self.bot_writer = None
+        self.called_on_ready = False
 
     # on_ready is not necessarily called just once.
     # So, do process only at the first calling.
     async def on_ready(self):
-        if not self._called_on_ready:
+        if not self.called_on_ready:
             auth = tweepy.OAuthHandler(self.consumer_key, self.consumer_secret)
             auth.set_access_token(self.access_token, self.access_secret)
             self.auth = auth
-            self._called_on_ready = True
+            self.bot_writer = BotWriter(auth)
+            self.called_on_ready = True
 
     async def on_message(self, msg):
         # Raise error if msg.content cannot be parsed
         cmdlist = []
         try:
             cmdlist = shlex.split(msg.content)
-            logger.debug(f"cmdlist: {cmdlist}")
         except:
             logger.debug(
                 f"[DEBUG] Failed to parse msg.content (msg.content: {msg.content})"
             )
-        cid = msg.channel.id
 
         maincmd = cmdlist[0] if len(cmdlist) > 0 else None
         subcmd = cmdlist[1] if len(cmdlist) > 1 else None
+        cid = msg.channel.id
 
         # Do nothing when message has no '!tw'
         if maincmd != "!tw":
@@ -115,68 +184,49 @@ class BotClient(discord.Client):
                 await msg.channel.send(emsg)
                 return
 
-            if cid not in self.writers:
-                self.writers[cid] = {}
-
-            if screen_name in self.writers[cid]:
-                emsg = f"[ERROR] 既に登録されているツイッターアカウントです (アカウント名: {screen_name})"
-                await msg.channel.send(emsg)
-                return
-
             try:
-                if match_ptn:
-                    # Check regular expression
-                    re.compile(match_ptn)
-                self.writers[cid][screen_name] = BotWriter(
-                    self.auth, screen_name, msg.channel, match_ptn
-                )
+                self.bot_writer.add(msg.channel, screen_name, match_ptn)
                 imsg = f"[INFO] アカウントの登録に成功しました (アカウント名: {screen_name}"
                 if match_ptn:
                     imsg += f", 正規表現: {repr(match_ptn)}"
                 else:
                     imsg += ")"
                 await msg.channel.send(imsg)
-            except ValueError:
+            except Exception as exc:
                 logger.exception("[ERROR] Recieve Exception")
-                emsg = f"[ERROR] 正規表現が不正です (正規表現: {repr(match_ptn)})"
-                logger.error(emsg)
-                await msg.channel.send(emsg)
-                return
-            except:
-                logger.exception("[ERROR] Recieve Exception")
-                emsg = f"[ERROR] 存在しないツイッターアカウント名です (アカウント名: {screen_name})"
-                logger.error(emsg)
-                await msg.channel.send(emsg)
+                logger.error(exc)
+                await msg.channel.send(exc)
                 return
 
         # Receive remove command
         elif subcmd == "remove":
-            account = cmdlist[2] if len(cmdlist) > 2 else None
+            screen_name = cmdlist[2] if len(cmdlist) > 2 else None
 
-            if not account:
+            if not screen_name:
                 emsg = f"[ERROR] アカウント名が指定されていません"
                 await msg.channel.send(emsg)
                 return
 
-            if cid not in self.writers or account not in self.writers[cid]:
-                emsg = f"[ERROR] 登録されていないツイッターアカウントです (アカウント名: {account})"
-                logger.error(emsg)
-                await msg.channel.send(emsg)
+            try:
+                self.bot_writer.remove(msg.channel, screen_name)
+            except Exception as exc:
+                logger.exception("[ERROR] Recieve Exception")
+                logger.error(exc)
+                await msg.channel.send(exc)
                 return
 
-            self.writers[cid].pop(account)
-            imsg = f"[INFO] アカウントの削除に成功しました (アカウント名: {account})"
+            imsg = f"[INFO] アカウントの削除に成功しました (アカウント名: {screen_name})"
             await msg.channel.send(imsg)
 
         # Receive list command
         elif subcmd == "list":
             imsg = f"[INFO] 登録済みのアカウントはありません"
-            if cid in self.writers and self.writers[cid]:
+            if cid in self.bot_writer.user_list and self.bot_writer.user_list[cid]:
                 imsg = f"[INFO] 登録済みのアカウント:"
-                for account in self.writers[cid]:
-                    imsg += f"\r・{account}"
-                    if self.writers[cid][account].match_ptn:
-                        imsg += f" (正規表現: {repr(self.writers[cid][account].match_ptn)})"
+                for screen_name in self.bot_writer.user_list[cid]:
+                    imsg += f"\r・{screen_name}"
+                    if self.bot_writer.writers[(cid, screen_name)].match_ptn:
+                        imsg += f" (正規表現: {repr(self.bot_writer.writers[(cid, screen_name)].match_ptn)})"
             await msg.channel.send(imsg)
 
         # Receive help command

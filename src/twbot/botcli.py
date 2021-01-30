@@ -148,7 +148,7 @@ class BotClient(discord.Client):
 
         # Receive remove command
         elif subcmd == "remove":
-            account = cmdlist[2] if cmdlist > 2 else None
+            account = cmdlist[2] if len(cmdlist) > 2 else None
 
             if not account:
                 emsg = f"[ERROR] アカウント名が指定されていません"

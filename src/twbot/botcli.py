@@ -24,9 +24,13 @@ class TwListener(tweepy.StreamListener):
         if status.user.id != self.uid:
             return
 
+        # Format tweet
+        expand_text = status.text
+        for e in status.entities['urls']:
+            expand_text = expand_text.replace(e['url'], e['display_url'])
+            
         # Not matched
-        logger.debug(status.text)
-        if self.match_ptn and not re.search(self.match_ptn, status.text):
+        if self.match_ptn and not re.search(self.match_ptn, expand_text):
             logger.debug("[DEBUG] status.text is not matched with regular expression")
             return
 
@@ -84,7 +88,6 @@ class BotClient(discord.Client):
 
     async def on_message(self, msg):
         # Raise error if msg.content cannot be parsed
-        logger.debug(f"msg.content: {msg.content}")
         cmdlist = []
         try:
             cmdlist = shlex.split(msg.content)
@@ -129,13 +132,13 @@ class BotClient(discord.Client):
                 )
                 imsg = f"[INFO] アカウントの登録に成功しました (アカウント名: {screen_name}"
                 if match_ptn:
-                    imsg += f', 正規表現: "{match_ptn}"'
+                    imsg += f", 正規表現: {repr(match_ptn)}"
                 else:
                     imsg += ")"
                 await msg.channel.send(imsg)
             except ValueError:
                 logger.exception("[ERROR] Recieve Exception")
-                emsg = f'[ERROR] 正規表現が不正です (正規表現: "{match_ptn})"'
+                emsg = f"[ERROR] 正規表現が不正です (正規表現: {repr(match_ptn)})"
                 logger.error(emsg)
                 await msg.channel.send(emsg)
                 return
@@ -173,7 +176,7 @@ class BotClient(discord.Client):
                 for account in self.writers[cid]:
                     imsg += f"\r・{account}"
                     if self.writers[cid][account].match_ptn:
-                        imsg += f" (正規表現: {self.writers[cid][account].match_ptn})"
+                        imsg += f" (正規表現: {repr(self.writers[cid][account].match_ptn)})"
             await msg.channel.send(imsg)
 
         # Receive help command

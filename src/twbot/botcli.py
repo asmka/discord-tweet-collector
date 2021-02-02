@@ -1,13 +1,11 @@
 import asyncio
-import logging
 import re
 import shlex
 
 import discord
 import tweepy
 
-logging.basicConfig(level=logging.ERROR, format="%(threadName)s: %(message)s")
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 
 class TwListener(tweepy.StreamListener):

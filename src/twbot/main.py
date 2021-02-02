@@ -1,8 +1,6 @@
 import sys
-import json
 
-import discord
-
+from .logger import logger
 from .config import Config
 from .botcli import BotClient
 
@@ -20,10 +18,16 @@ def main():
     config_file = args[1]
 
     # Parse config file
-    df = {}
-    with open(config_file) as f:
-        df = json.load(f)
-    config = Config(df)
+    try:
+        config = Config(config_file)
+    except Exception as exc:
+        logger.exception("[ERROR] Recieve Exception")
+        logger.error("[ERROR] Config file is invalid")
+        print(
+            f"[ERROR] Config file is invalid",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # Run bot
     bot_cli = BotClient(

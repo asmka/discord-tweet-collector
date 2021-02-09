@@ -136,11 +136,14 @@ class BotWriter:
 class BotClient(discord.Client):
     def __init__(self, consumer_key, consumer_secret, access_token, access_secret):
         super().__init__()
-        self.auth = None
-        self.consumer_key = consumer_key
-        self.consumer_secret = consumer_secret
-        self.access_token = access_token
-        self.access_secret = access_secret
+        auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+        auth.set_access_token(access_token, access_secret)
+        api = tweepy.API(auth)
+        if api.verify_credentials() == False:
+            raise ValueError('[ERROR] Failed to authenticate twitter api.')
+
+        self.auth = auth
+        self.api = api
         self.bot_writer = None
         self.called_on_ready = False
 
@@ -148,10 +151,7 @@ class BotClient(discord.Client):
     # So, do process only at the first calling.
     async def on_ready(self):
         if not self.called_on_ready:
-            auth = tweepy.OAuthHandler(self.consumer_key, self.consumer_secret)
-            auth.set_access_token(self.access_token, self.access_secret)
-            self.auth = auth
-            self.bot_writer = BotWriter(auth)
+            self.bot_writer = BotWriter(self.auth)
             self.called_on_ready = True
 
     async def on_message(self, msg):
@@ -163,6 +163,7 @@ class BotClient(discord.Client):
             logger.debug(
                 f"[DEBUG] Failed to parse msg.content (msg.content: {msg.content})"
             )
+            return
 
         maincmd = cmdlist[0] if len(cmdlist) > 0 else None
         subcmd = cmdlist[1] if len(cmdlist) > 1 else None

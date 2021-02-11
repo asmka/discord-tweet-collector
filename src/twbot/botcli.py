@@ -8,22 +8,24 @@ import tweepy
 from .logger import logger
 
 
-class TwListener(tweepy.StreamListener):
-    def __init__(self, loop, writers):
-        super().__init__()
-        wdict = {}
+class TwStream(tweepy.Stream):
+    def __init__(
+        self, consumer_key, consumer_secret, access_token, access_secret, loop, writers
+    ):
+        super().__init__(consumer_key, consumer_secret, access_token, access_secret)
+        writers_dict = {}
         for w in writers.values():
-            if w.uid not in wdict:
-                wdict[w.uid] = []
-            wdict[w.uid].append(w)
+            if w.uid not in writers_dict:
+                writers_dict[w.uid] = []
+            writers_dict[w.uid].append(w)
 
         self.loop = loop
-        self.wdict = wdict
+        self.writers_dict = writers_dict
 
     def on_status(self, status):
         # Get new tweet
         # For some reason, get tweets of other users
-        if status.user.id not in self.wdict:
+        if status.user.id not in self.writers_dict:
             return
 
         # Format tweet
@@ -31,7 +33,7 @@ class TwListener(tweepy.StreamListener):
         for e in status.entities["urls"]:
             expand_text = expand_text.replace(e["url"], e["display_url"])
 
-        for w in self.wdict[status.user.id]:
+        for w in self.writers_dict[status.user.id]:
             # Not matched
             if w.match_ptn and not re.search(w.match_ptn, expand_text):
                 logger.debug(
@@ -55,23 +57,29 @@ class Writer:
 
 
 class BotWriter:
-    def __init__(self, auth):
+    def __init__(self, consumer_key, consumer_secret, access_token, access_secret, api):
         self.loop = asyncio.get_event_loop()
-        self.auth = auth
-        self.api = tweepy.API(auth)
+
+        self.consumer_key = consumer_key
+        self.consumer_secret = consumer_secret
+        self.access_token = access_token
+        self.access_secret = access_secret
+        self.api = api
+
         self.writers = {}
         self.user_counts = {}
         self.follows = []
         self.stream = None
         self.user_list = {}
 
-    def __del__(self):
+    def close(self):
         if self.stream:
             self.stream.disconnect()
+            self.stream = None
 
     def add(self, channel, screen_name, match_ptn):
         # Raise exception if the account is not exist
-        status = self.api.get_user(screen_name)
+        status = self.api.get_user(screen_name=screen_name)
         uid = status.id
         cid = channel.id
 
@@ -103,10 +111,18 @@ class BotWriter:
         # Reconstruct stream to run just one stream
         if self.stream:
             self.stream.disconnect()
-        self.stream = tweepy.Stream(
-            auth=self.auth, listener=TwListener(self.loop, self.writers)
+        self.stream = TwStream(
+            self.consumer_key,
+            self.consumer_secret,
+            self.access_token,
+            self.access_secret,
+            self.loop,
+            self.writers,
         )
-        self.stream.filter(follow=self.follows, is_async=True)
+        # self.stream = tweepy.Stream(
+        #    auth=self.auth, listener=TwListener(self.loop, self.writers)
+        # )
+        self.stream.filter(follow=self.follows, threaded=True)
 
     def remove(self, channel, screen_name):
         # Raise exception if the account is not exist
@@ -127,10 +143,18 @@ class BotWriter:
         # Reconstruct stream to run just one stream
         if self.stream:
             self.stream.disconnect()
-        self.stream = tweepy.Stream(
-            auth=self.auth, listener=TwListener(self.loop, self.writers)
+        self.stream = TwStream(
+            self.consumer_key,
+            self.consumer_secret,
+            self.access_token,
+            self.access_secret,
+            self.loop,
+            self.writers,
         )
-        self.stream.filter(follow=self.follows, is_async=True)
+        # self.stream = tweepy.Stream(
+        #    auth=self.auth, listener=TwListener(self.loop, self.writers)
+        # )
+        self.stream.filter(follow=self.follows, threaded=True)
 
 
 class BotClient(discord.Client):
@@ -140,18 +164,32 @@ class BotClient(discord.Client):
         auth.set_access_token(access_token, access_secret)
         api = tweepy.API(auth)
         if api.verify_credentials() == False:
-            raise ValueError('[ERROR] Failed to authenticate twitter api.')
+            raise ValueError("[ERROR] Failed to authenticate twitter api.")
 
-        self.auth = auth
         self.api = api
         self.bot_writer = None
         self.called_on_ready = False
+
+        self.consumer_key = consumer_key
+        self.consumer_secret = consumer_secret
+        self.access_token = access_token
+        self.access_secret = access_secret
+
+    async def close(self):
+        self.bot_writer.close()
+        await super().close()
 
     # on_ready is not necessarily called just once.
     # So, do process only at the first calling.
     async def on_ready(self):
         if not self.called_on_ready:
-            self.bot_writer = BotWriter(self.auth)
+            self.bot_writer = BotWriter(
+                self.consumer_key,
+                self.consumer_secret,
+                self.access_token,
+                self.access_secret,
+                self.api,
+            )
             self.called_on_ready = True
 
     async def on_message(self, msg):

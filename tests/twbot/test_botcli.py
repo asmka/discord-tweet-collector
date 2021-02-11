@@ -1,5 +1,8 @@
 import asyncio
 import threading
+import concurrent.futures
+import time
+import re
 import json
 
 import pytest
@@ -8,15 +11,19 @@ import discord
 from twbot.botcli import BotClient
 
 
-class TestConfig:
+class LocalConfig:
     def __init__(self, file_name: str):
         conf_dic = {}
         with open(file_name) as f:
             conf_dic = json.load(f)
 
-        if "bot_token" not in conf_dic:
-            raise ValueError("bot_token is not in config file")
-        self.bot_token = conf_dic["bot_token"]
+        if "test_bot_token" not in conf_dic:
+            raise ValueError("test_bot_token is not in config file")
+        self.test_bot_token = conf_dic["test_bot_token"]
+
+        if "eval_bot_token" not in conf_dic:
+            raise ValueError("eval_bot_token is not in config file")
+        self.eval_bot_token = conf_dic["eval_bot_token"]
 
         if "consumer_key" not in conf_dic:
             raise ValueError("consumer_key is not in config file")
@@ -39,7 +46,8 @@ class TestConfig:
         self.test_channel_id = conf_dic["test_channel_id"]
 
         expected_keys = [
-            "bot_token",
+            "test_bot_token",
+            "eval_bot_token",
             "consumer_key",
             "consumer_secret",
             "access_token",
@@ -51,69 +59,104 @@ class TestConfig:
                 raise ValueError(f"Invalid parameter is included (param: {k})")
 
 
-@pytest.fixture()
-def config(pytestconfig):
-    file_name = pytestconfig.getoption("conf")
-    return TestConfig(file_name)
+class EvalClient(discord.Client):
+    def __init__(self, eval_ptn):
+        super().__init__()
+        self.eval_ptn = eval_ptn
+        self.is_called_on_ready = False
+        self.is_passed = False
+
+    async def on_ready(self):
+        #print(f"[DEBUG] on_ready ({threading.current_thread().getName()})")
+        self.is_called_on_ready = True
+
+    async def on_message(self, message):
+        #print(f"[DEBUG] on_message ({threading.current_thread().getName()})")
+        if re.search(self.eval_ptn, message.content):
+            self.is_passed = True
 
 
-@pytest.fixture()
-def bot_cli(config):
+def run_bot(client: discord.Client, token: str, loop):
+    #print(f"[DEBUG] Called run_bot ({threading.current_thread().getName()})")
+    future = asyncio.run_coroutine_threadsafe(client.start(token), loop)
+    future.result()
+
+
+def stop_bot(client: discord.Client, loop):
+    #print(f"[DEBUG] Called stop_bot ({threading.current_thread().getName()})")
+    future = asyncio.run_coroutine_threadsafe(client.close(), loop)
+    future.result()
+
+
+def send_message(client: discord.Client, channel_id: int, message: str, loop):
+    #print(f"[DEBUG] Called send_message ({threading.current_thread().getName()})")
+    while not client.is_called_on_ready:
+        pass
+    channel = client.get_channel(int(channel_id))
+    future = asyncio.run_coroutine_threadsafe(channel.send(message), loop)
+    future.result()
+
+
+def eval_and_close_loop(bot_cli, eval_cli, timeout_seconds, loop):
+    #print(f"[DEBUG] Called eval_and_close_loop ({threading.current_thread().getName()})")
+    seconds = 0
+    while True:
+        if eval_cli.is_passed or seconds >= timeout_seconds:
+            break
+        time.sleep(1)
+        seconds += 1
+
+    future = asyncio.run_coroutine_threadsafe(bot_cli.close(), loop)
+    future.result()
+    future = asyncio.run_coroutine_threadsafe(eval_cli.close(), loop)
+    future.result()
+    loop.call_soon_threadsafe(loop.stop)
+    #loop.call_soon_threadsafe(loop.close)
+
+
+def eval_send_message_and_recieve_pattern(config, message, pattern, timeout_seconds):
+    #print(f"[DEBUG] Called eval_send_message_and_recieve_pattern ({threading.current_thread().getName()})")
     bot_cli = BotClient(
         config.consumer_key,
         config.consumer_secret,
         config.access_token,
         config.access_secret,
     )
-    return bot_cli
+    eval_cli = EvalClient(pattern)
 
-
-def run_bot(loop, client, token):
-    future = asyncio.run_coroutine_threadsafe(
-        client.start(token),
-        loop,
-    )
-    future.result()
-
-
-def send_message(loop, client, channel_id, message):
-    while not client.is_ready():
-        pass
-
-    future = asyncio.run_coroutine_threadsafe(client.fetch_channel(channel_id), loop)
-    channel = future.result()
-
-    future = asyncio.run_coroutine_threadsafe(
-        channel.send(message),
-        loop,
-    )
-    future.result()
-
-
-def test_recieve_invalid_main_command(self, config, bot_cli):
     loop = asyncio.get_event_loop()
 
     t1 = threading.Thread(
         target=run_bot,
-        args=(
-            loop,
-            bot_cli,
-            config.bot_token,
-        ),
+        args=(bot_cli, config.test_bot_token, loop),
     )
     t2 = threading.Thread(
+        target=run_bot,
+        args=(eval_cli, config.eval_bot_token, loop),
+    )
+    t3 = threading.Thread(
         target=send_message,
-        args=(
-            loop,
-            bot_cli,
-            config.test_channel_id,
-            "!twx add",
-        ),
+        args=(eval_cli, config.test_channel_id, message, loop),
+    )
+    t4 = threading.Thread(
+        target=eval_and_close_loop,
+        args=(bot_cli, eval_cli, timeout_seconds, loop),
     )
     t1.start()
     t2.start()
+    t3.start()
+    t4.start()
 
     loop.run_forever()
+    loop.close()
+
+    return eval_cli.is_passed
+
+
+@pytest.fixture()
+def config(pytestconfig):
+    file_name = pytestconfig.getoption("conf")
+    return LocalConfig(file_name)
 
 
 class TestBotClient:
@@ -153,29 +196,10 @@ class TestBotClient:
                 "INVALID_ACCESS_SECRET",
             )
 
-    def test_recieve_invalid_main_command(self, config, bot_cli):
-        loop = asyncio.get_event_loop()
-
-        t1 = threading.Thread(
-            target=run_bot,
-            args=(
-                loop,
-                bot_cli,
-                config.bot_token,
-            ),
+    def test_recieve_invalid_main_command(self, config):
+        assert (
+            eval_send_message_and_recieve_pattern(
+                config, "!tw add edaisgod2525", r"\[INFO\] アカウントの登録に成功しました", 5
+            )
+            == True
         )
-        t2 = threading.Thread(
-            target=send_message,
-            args=(
-                loop,
-                bot_cli,
-                config.test_channel_id,
-                "!twx add",
-            ),
-        )
-        t1.start()
-        t2.start()
-
-        loop.run_forever()
-        # await asyncio.sleep(5)
-        # bot_cli.close()

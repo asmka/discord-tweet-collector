@@ -12,60 +12,6 @@ from .exception import TCBotError
 from .twstream import Monitor, TweetStream
 
 
-# class BotWriter:
-#    def __init__(self, consumer_key, consumer_secret, access_token, access_secret, api):
-#        self.loop = asyncio.get_event_loop()
-#
-#        self.consumer_key = consumer_key
-#        self.consumer_secret = consumer_secret
-#        self.access_token = access_token
-#        self.access_secret = access_secret
-#        self.api = api
-#
-#        self.writers = {}
-#        self.user_counts = {}
-#        self.follows = []
-#        self.stream = None
-#        self.user_list = {}
-#
-#    def close(self):
-#        if self.stream:
-#            self.stream.disconnect()
-#            self.stream = None
-#
-#    def remove(self, channel, screen_name):
-#        # Raise exception if the account is not exist
-#        cid = channel.id
-#
-#        # Raise exception if the account is already registered
-#        if (cid, screen_name) not in self.writers:
-#            raise ValueError(f"[ERROR] 登録されていないツイッターアカウントです (アカウント名: {screen_name})")
-#
-#        uid = self.writers[(cid, screen_name)].uid
-#        self.writers.pop((cid, screen_name))
-#        self.user_counts[screen_name] -= 1
-#        if self.user_counts[screen_name] == 0:
-#            self.follows.remove(str(uid))
-#            self.user_counts.pop(screen_name)
-#        self.user_list[cid].remove(screen_name)
-#
-#        # Reconstruct stream to run just one stream
-#        if self.stream:
-#            self.stream.disconnect()
-#        self.stream = TweetStream(
-#            self.consumer_key,
-#            self.consumer_secret,
-#            self.access_token,
-#            self.access_secret,
-#            self.loop,
-#            self.writers,
-#        )
-#        # self.stream = tweepy.Stream(
-#        #    auth=self.auth, listener=TwListener(self.loop, self.writers)
-#        # )
-#        self.stream.filter(follow=self.follows, threaded=True)
-
-
 class BotClient(discord.Client):
     def __init__(
         self, consumer_key, consumer_secret, access_token, access_secret, loop=None
@@ -77,7 +23,6 @@ class BotClient(discord.Client):
         if api.verify_credentials() == False:
             raise ValueError("[ERROR] Failed to authenticate twitter api.")
 
-        # self.called_on_ready = False
         self.api = api
 
         self.consumer_key = consumer_key
@@ -181,19 +126,6 @@ class BotClient(discord.Client):
         if self.stream:
             self._sync_close_stream()
 
-    # on_ready is not necessarily called just once.
-    # So, do process only at the first calling.
-    # async def on_ready(self):
-    #    if not self.called_on_ready:
-    #        self.bot_writer = BotWriter(
-    #            self.consumer_key,
-    #            self.consumer_secret,
-    #            self.access_token,
-    #            self.access_secret,
-    #            self.api,
-    #        )
-    #        self.called_on_ready = True
-
     async def on_message(self, msg):
         if msg.author == self.user:
             return
@@ -202,9 +134,7 @@ class BotClient(discord.Client):
         try:
             cmdlist = shlex.split(msg.content)
         except:
-            logger.debug(
-                f"Failed to parse msg.content (msg.content: {msg.content})"
-            )
+            logger.debug(f"Failed to parse msg.content (msg.content: {msg.content})")
             return
 
         maincmd = cmdlist[0] if len(cmdlist) > 0 else None

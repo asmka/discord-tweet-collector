@@ -1,9 +1,9 @@
 import asyncio
 import threading
-import concurrent.futures
 import time
 import re
 import json
+from typing import List
 
 import pytest
 import discord
@@ -60,95 +60,146 @@ class LocalConfig:
 
 
 class EvalClient(discord.Client):
-    def __init__(self, eval_ptn):
-        super().__init__()
-        self.eval_ptn = eval_ptn
-        self.is_called_on_ready = False
-        self.is_passed = False
+    def __init__(self, eval_ptns, loop=None):
+        super().__init__(loop=loop)
 
-    async def on_ready(self):
-        #print(f"[DEBUG] on_ready ({threading.current_thread().getName()})")
-        self.is_called_on_ready = True
+        self.eval_ptn_itr = None
+        self.eval_ptn = None
+        self.is_no_message_case = True
+        self.is_passed = None
 
-    async def on_message(self, message):
-        #print(f"[DEBUG] on_message ({threading.current_thread().getName()})")
-        if re.search(self.eval_ptn, message.content):
-            self.is_passed = True
+        if eval_ptns:
+            self.eval_ptn_itr = iter(eval_ptns)
+            self.eval_ptn = next(self.eval_ptn_itr)
+            self.is_no_message_case = False
+
+    async def on_message(self, msg):
+        if msg.author == self.user:
+            return
+
+        if self.is_no_message_case:
+            self.is_passed = False
+            return
+
+        if re.search(self.eval_ptn, msg.content):
+            try:
+                self.eval_ptn = next(self.eval_ptn_itr)
+            except StopIteration:
+                self.is_passed = True
 
 
 def run_bot(client: discord.Client, token: str, loop):
-    #print(f"[DEBUG] Called run_bot ({threading.current_thread().getName()})")
     future = asyncio.run_coroutine_threadsafe(client.start(token), loop)
     future.result()
 
 
 def stop_bot(client: discord.Client, loop):
-    #print(f"[DEBUG] Called stop_bot ({threading.current_thread().getName()})")
+    # Wait until bot is ready
+    while not client.is_ready():
+        pass
     future = asyncio.run_coroutine_threadsafe(client.close(), loop)
     future.result()
 
-
-def send_message(client: discord.Client, channel_id: int, message: str, loop):
-    #print(f"[DEBUG] Called send_message ({threading.current_thread().getName()})")
-    while not client.is_called_on_ready:
+    # Wait until bot is closed
+    while not client.is_closed():
         pass
-    channel = client.get_channel(int(channel_id))
-    future = asyncio.run_coroutine_threadsafe(channel.send(message), loop)
-    future.result()
 
 
-def eval_and_close_loop(bot_cli, eval_cli, timeout_seconds, loop):
-    #print(f"[DEBUG] Called eval_and_close_loop ({threading.current_thread().getName()})")
+def wait_test_and_stop_bots(
+    test_cli: BotClient, eval_cli: EvalClient, timeout_seconds: int, loop
+):
+    # Evaluate test case
     seconds = 0
-    while True:
-        if eval_cli.is_passed or seconds >= timeout_seconds:
-            break
+    while eval_cli.is_passed is None and seconds < timeout_seconds:
         time.sleep(1)
         seconds += 1
 
-    future = asyncio.run_coroutine_threadsafe(bot_cli.close(), loop)
-    future.result()
-    future = asyncio.run_coroutine_threadsafe(eval_cli.close(), loop)
-    future.result()
-    loop.call_soon_threadsafe(loop.stop)
-    #loop.call_soon_threadsafe(loop.close)
+    # In case of getting no messages
+    if eval_cli.is_passed is None:
+        eval_cli.is_passed = True
+
+    # Wait test_cli on_message process with itself
+    time.sleep(1)
+
+    # Stop bots and loop
+    stop_bot(test_cli, loop)
+    stop_bot(eval_cli, loop)
 
 
-def eval_send_message_and_recieve_pattern(config, message, pattern, timeout_seconds):
-    #print(f"[DEBUG] Called eval_send_message_and_recieve_pattern ({threading.current_thread().getName()})")
-    bot_cli = BotClient(
+def send_messages(
+    test_cli: BotClient,
+    eval_cli: EvalClient,
+    channel_id: int,
+    messages: List[str],
+    loop,
+):
+    # Wait bots are ready
+    while not (test_cli.is_ready() and eval_cli.is_ready()):
+        pass
+
+    # Send message
+    channel = eval_cli.get_channel(int(channel_id))
+    for msg in messages:
+        future = asyncio.run_coroutine_threadsafe(channel.send(msg), loop)
+        future.result()
+
+
+def eval_send_messages(config, messages: List[str], patterns, timeout_seconds):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    test_cli = BotClient(
         config.consumer_key,
         config.consumer_secret,
         config.access_token,
         config.access_secret,
+        loop=loop,
     )
-    eval_cli = EvalClient(pattern)
-
-    loop = asyncio.get_event_loop()
+    eval_cli = EvalClient(patterns, loop=loop)
 
     t1 = threading.Thread(
         target=run_bot,
-        args=(bot_cli, config.test_bot_token, loop),
+        args=(test_cli, config.test_bot_token, loop),
     )
     t2 = threading.Thread(
         target=run_bot,
         args=(eval_cli, config.eval_bot_token, loop),
     )
     t3 = threading.Thread(
-        target=send_message,
-        args=(eval_cli, config.test_channel_id, message, loop),
+        target=send_messages,
+        args=(
+            test_cli,
+            eval_cli,
+            config.test_channel_id,
+            messages,
+            loop,
+        ),
     )
     t4 = threading.Thread(
-        target=eval_and_close_loop,
-        args=(bot_cli, eval_cli, timeout_seconds, loop),
+        target=wait_test_and_stop_bots,
+        args=(
+            test_cli,
+            eval_cli,
+            timeout_seconds,
+            loop,
+        ),
     )
+
+    loop_thread = threading.Thread(target=loop.run_forever)
+    loop_thread.start()
+
     t1.start()
     t2.start()
     t3.start()
     t4.start()
 
-    loop.run_forever()
-    loop.close()
+    t1.join()
+    t2.join()
+    t3.join()
+    t4.join()
+
+    loop.stop()
+    loop_thread.join()
 
     return eval_cli.is_passed
 
@@ -196,10 +247,32 @@ class TestBotClient:
                 "INVALID_ACCESS_SECRET",
             )
 
-    def test_recieve_invalid_main_command(self, config):
-        assert (
-            eval_send_message_and_recieve_pattern(
-                config, "!tw add edaisgod2525", r"\[INFO\] アカウントの登録に成功しました", 5
-            )
-            == True
+    def test_invalid_main_command(self, config):
+        assert eval_send_messages(config, ["!tww add"], [], 5)
+
+    def test_add_command_exist_account(self, config):
+        assert eval_send_messages(
+            config,
+            ["!tw add edaisgod2525"],
+            [r"^\[INFO\] アカウントの登録に成功しました．アカウント名: edaisgod2525, 正規表現: None$"],
+            5,
+        )
+
+    def test_add_command_not_exist_account(self, config):
+        assert eval_send_messages(
+            config,
+            ["!tw add NON_EXSITING_ACCOUNT_202102211456"],
+            [r"^\[ERROR\] 存在しないアカウントです．アカウント名: NON_EXSITING_ACCOUNT_202102211456$"],
+            5,
+        )
+
+    def test_add_command_already_added_account(self, config):
+        assert eval_send_messages(
+            config,
+            ["!tw add edaisgod2525", "!tw add edaisgod2525"],
+            [
+                r"^\[INFO\] アカウントの登録に成功しました．アカウント名: edaisgod2525, 正規表現: None$",
+                r"^\[ERROR\] 既に登録されているアカウントです．アカウント名: edaisgod2525$",
+            ],
+            5,
         )

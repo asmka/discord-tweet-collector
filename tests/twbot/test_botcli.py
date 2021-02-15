@@ -1,5 +1,5 @@
-import pytest
 import discord
+import pytest
 
 from localconfig import LocalConfig
 from twbot.botcli import BotClient

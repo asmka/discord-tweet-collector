@@ -7,7 +7,7 @@ import discord
 import tweepy
 
 from .logger import logger
-from .writer import send_info, send_error
+from .chwriter import send_info, send_error
 from .exception import TCBotError
 from .twstream import Monitor, TweetStream
 

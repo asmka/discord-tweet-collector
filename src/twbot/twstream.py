@@ -56,7 +56,7 @@ class TweetStream(tweepy.Stream):
                 )
                 return
 
-            url = f"https://twitter.com/{status.user.screen_name}/status/{user_id}"
+            url = f"https://twitter.com/{status.user.screen_name}/status/{status.id}"
             future = asyncio.run_coroutine_threadsafe(m.channel.send(url), self.loop)
             future.result()
 

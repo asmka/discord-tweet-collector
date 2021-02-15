@@ -67,10 +67,7 @@ def send_messages(
 
 
 def eval_send_messages(
-    config: LocalConfig,
-    messages: List[str],
-    patterns: List[str],
-    timeout_seconds: int,
+    config: LocalConfig, messages: List[str], patterns: List[str], timeout_seconds: int
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

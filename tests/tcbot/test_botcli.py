@@ -1,15 +1,21 @@
+from typing import List, Dict
+
 import discord
 import pytest
 
-from localconfig import LocalConfig
-from twbot.botcli import BotClient
+from tcbot.botcli import BotClient
+
 from evalcli import eval_send_messages
 
 
-@pytest.fixture()
-def config(pytestconfig):
-    file_name = pytestconfig.getoption("conf")
-    return LocalConfig(file_name)
+class MockMonitorDB:
+    def __init__(self):
+        self.monitors: List[Dict] = []
+
+    def add(self, channel_id, tw_user_id, match_ptn):
+        self.monitors.append(
+            {"channel_id": channel_id, "tw_user_id": tw_user_id, "match_ptn": match_ptn}
+        )
 
 
 class TestBotClient:
@@ -50,12 +56,13 @@ class TestBotClient:
             )
 
     def test_invalid_main_command(self, config):
-        assert eval_send_messages(config, ["!tww add"], [], 5)
+        assert eval_send_messages(config, ["!tcc add"], [], 5)
 
     def test_add_command_exist_account(self, config):
+        monitor_db = MockMonitorDB()
         assert eval_send_messages(
             config,
-            ["!tw add tt4bot"],
+            ["!tc add tt4bot"],
             [r"^\[INFO\] アカウントの登録に成功しました．アカウント名: tt4bot, 正規表現: None$"],
             5,
         )
@@ -63,7 +70,7 @@ class TestBotClient:
     def test_add_command_not_exist_account(self, config):
         assert eval_send_messages(
             config,
-            ["!tw add NON_EXSITING_ACCOUNT_202102211456"],
+            ["!tc add NON_EXSITING_ACCOUNT_202102211456"],
             [r"^\[ERROR\] 存在しないアカウントです．アカウント名: NON_EXSITING_ACCOUNT_202102211456$"],
             5,
         )
@@ -71,7 +78,7 @@ class TestBotClient:
     def test_add_command_already_added_account(self, config):
         assert eval_send_messages(
             config,
-            ["!tw add tt4bot", "!tw add tt4bot"],
+            ["!tc add tt4bot", "!tc add tt4bot"],
             [
                 r"^\[INFO\] アカウントの登録に成功しました．アカウント名: tt4bot, 正規表現: None$",
                 r"^\[ERROR\] 既に登録されているアカウントです．アカウント名: tt4bot$",

@@ -37,7 +37,9 @@ class BotClient(discord.Client):
         self.monitor_users = set()
         self.user_owners = {}
 
-        self.loop = asyncio.get_event_loop()
+        self.monitor_db = None
+
+        self.loop = loop
 
     def _enumerate_monitors(self):
         enum_monitors = []
@@ -70,7 +72,7 @@ class BotClient(discord.Client):
         except tweepy.TweepError as exc:
             raise TCBotError(f"存在しないアカウントです．アカウント名: {screen_name}") from exc
         else:
-            user_id = status.id
+            tw_user_id = status.id
 
         # Raise exception if the regular expression is invalid
         if match_ptn:
@@ -87,12 +89,12 @@ class BotClient(discord.Client):
             self.monitors_table[channel.id] = {}
 
         # Update management data
-        self.monitors_table[channel.id][screen_name] = Monitor(
-            channel, user_id, match_ptn
-        )
+        monitor = Monitor(channel, tw_user_id, match_ptn)
+        self.monitors_table[channel.id][screen_name] = monitor
+        self.monitor_db.add(channel.id, tw_user_id, match_ptn)
 
-        if user_id not in self.monitor_users:
-            self.monitor_users.add(user_id)
+        if tw_user_id not in self.monitor_users:
+            self.monitor_users.add(tw_user_id)
 
         if screen_name not in self.user_owners:
             self.user_owners[screen_name] = set()
@@ -140,8 +142,8 @@ class BotClient(discord.Client):
         maincmd = cmdlist[0] if len(cmdlist) > 0 else None
         subcmd = cmdlist[1] if len(cmdlist) > 1 else None
 
-        # Do nothing when message has no '!tw'
-        if maincmd != "!tw":
+        # Do nothing when message has no '!tc'
+        if maincmd != "!tc":
             return
 
         # Receive add command

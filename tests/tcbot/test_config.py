@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from twbot.config import Config
+from tcbot.config import Config
 
 cpath = Path(__file__).parent
 
@@ -40,5 +40,7 @@ class TestConfig:
             Config(cpath / "config/with_no_access_secret_param.json")
 
     def test_initialize_with_invalid_param(self):
-        with pytest.raises(ValueError, match=r"Invalid parameter is included \(param: .+\)"):
+        with pytest.raises(
+            ValueError, match=r"Invalid parameter is included \(param: .+\)"
+        ):
             Config(cpath / "config/with_invalid_param.json")

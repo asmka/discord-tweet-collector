@@ -8,7 +8,7 @@ import tweepy
 import discord
 
 from localconfig import LocalConfig
-from twbot.botcli import BotClient
+from tcbot.botcli import BotClient
 
 
 class EvalClient(discord.Client):

@@ -7,7 +7,8 @@ from typing import List
 import tweepy
 import discord
 
-from localconfig import LocalConfig
+from tcbot.twauth import TwitterAuth
+from tcbot.monitordb import MonitorDB
 from tcbot.botcli import BotClient
 
 
@@ -67,16 +68,25 @@ def send_messages(
 
 
 def eval_send_messages(
-    config: LocalConfig, messages: List[str], patterns: List[str], timeout_seconds: int
+    config,
+    monitor_db: MonitorDB,
+    messages: List[str],
+    patterns: List[str],
+    timeout_seconds: int,
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    test_cli = BotClient(
+    tw_auth = TwitterAuth(
         config.consumer_key,
         config.consumer_secret,
         config.access_token,
         config.access_secret,
+    )
+
+    test_cli = BotClient(
+        monitor_db,
+        tw_auth,
         loop=loop,
     )
     eval_cli = EvalClient(patterns, loop=loop)

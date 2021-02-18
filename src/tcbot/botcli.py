@@ -6,58 +6,33 @@ from typing import List, Tuple
 import discord
 import tweepy
 
+from .monitordb import MonitorDB
 from .logger import logger
 from .chwriter import send_info, send_error
 from .exception import TCBotError
-from .twstream import Monitor, TweetStream
+from .twauth import TwitterAuth
+from .tcstream import TweetCollectStream
 
 
 class BotClient(discord.Client):
     def __init__(
-        self, consumer_key, consumer_secret, access_token, access_secret, loop=None
+        self,
+        monitor_db: MonitorDB,
+        tw_auth: TwitterAuth,
+        loop=None,
     ):
-        super().__init__(loop=loop)
-        auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-        auth.set_access_token(access_token, access_secret)
-        api = tweepy.API(auth)
-        if api.verify_credentials() == False:
-            raise ValueError("[ERROR] Failed to authenticate twitter api.")
 
-        self.api = api
-
-        self.consumer_key = consumer_key
-        self.consumer_secret = consumer_secret
-        self.access_token = access_token
-        self.access_secret = access_secret
-
-        self.stream = None
-        self.stream_thread = None
-
-        self.monitors_table = {}
-        self.monitor_users = set()
-        self.user_owners = {}
-
-        self.monitor_db = None
-
+        self.monitor_db = monitor_db
+        self.tw_auth = tw_auth
         self.loop = loop
 
-    def _enumerate_monitors(self):
-        enum_monitors = []
-        for monitors_dict in self.monitors_table.values():
-            for monitor in monitors_dict.values():
-                enum_monitors.append(monitor)
+        self.stream = TweetCollectStream(
+            self.tw_auth,
+            self.monitor_db,
+            self.loop,
+        )
 
-        return enum_monitors
-
-    def _sync_close_stream(self):
-        if not self.stream:
-            raise TCBotError(
-                "Called _sync_close_stream() even though stream is not created."
-            )
-
-        self.stream.disconnect()
-        # Wait stream blocking I/O thread
-        self.stream_thread.join()
+        super().__init__(loop=loop)
 
     def _add(self, channel, args: List[str]) -> Tuple[str, str]:
         screen_name = args[0] if len(args) > 0 else None
@@ -68,11 +43,11 @@ class BotClient(discord.Client):
 
         # Raise exception if the account is not exist
         try:
-            status = self.api.get_user(screen_name=screen_name)
+            status = self.tw_auth.api.get_user(screen_name=screen_name)
         except tweepy.TweepError as exc:
             raise TCBotError(f"存在しないアカウントです．アカウント名: {screen_name}") from exc
         else:
-            tw_user_id = status.id
+            twitter_id = status.id
 
         # Raise exception if the regular expression is invalid
         if match_ptn:
@@ -82,39 +57,14 @@ class BotClient(discord.Client):
                 raise TCBotError(f"正規表現が不正です．正規表現: {match_ptn}") from exc
 
         # Raise exception if the account is already registered
-        if channel.id in self.monitors_table:
-            if screen_name in self.monitors_table[channel.id]:
-                raise TCBotError(f"既に登録されているアカウントです．アカウント名: {screen_name}")
-        else:
-            self.monitors_table[channel.id] = {}
+        if self.monitor_db.select(channel.id, twitter_id):
+            raise TCBotError(f"既に登録されているアカウントです．アカウント名: {screen_name}")
 
-        # Update management data
-        monitor = Monitor(channel, tw_user_id, match_ptn)
-        self.monitors_table[channel.id][screen_name] = monitor
-        self.monitor_db.add(channel.id, tw_user_id, match_ptn)
-
-        if tw_user_id not in self.monitor_users:
-            self.monitor_users.add(tw_user_id)
-
-        if screen_name not in self.user_owners:
-            self.user_owners[screen_name] = set()
-        self.user_owners[screen_name].add(channel.id)
+        # Update database
+        self.monitor_db.insert(channel.id, twitter_id, screen_name, match_ptn)
 
         # Reconstruct stream to run just one stream
-        if self.stream:
-            self._sync_close_stream()
-
-        self.stream = TweetStream(
-            self.consumer_key,
-            self.consumer_secret,
-            self.access_token,
-            self.access_secret,
-            self._enumerate_monitors(),
-            self.loop,
-        )
-        self.stream_thread = self.stream.filter(
-            follow=list(map(str, self.monitor_users)), threaded=True
-        )
+        self.stream.resume()
 
         return screen_name, match_ptn
 
@@ -123,10 +73,8 @@ class BotClient(discord.Client):
             raise Exception("Called close() before client is ready.")
 
         await super().close()
-
-        # self.bot_writer.close()
-        if self.stream:
-            self._sync_close_stream()
+        self.stream.disconnect()
+        self.stream = None
 
     async def on_message(self, msg):
         if msg.author == self.user:

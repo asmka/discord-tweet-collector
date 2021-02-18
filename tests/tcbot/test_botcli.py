@@ -3,84 +3,85 @@ from typing import List, Dict
 import discord
 import pytest
 
+from tcbot.monitordb import MonitorDB
 from tcbot.botcli import BotClient
+from tcbot.twauth import TwitterAuth
 
 from evalcli import eval_send_messages
 
 
-class MockMonitorDB:
-    def __init__(self):
-        self.monitors: List[Dict] = []
+EDAISGOD2525_USER_ID = 1170664739199807488
+TT4BOT_USER_ID = 1359637846919847937
 
-    def add(self, channel_id, tw_user_id, match_ptn):
-        self.monitors.append(
-            {"channel_id": channel_id, "tw_user_id": tw_user_id, "match_ptn": match_ptn}
-        )
+
+@pytest.fixture(scope="module")
+def _empty_db_with_monitor_table(config):
+    table_name = "test_monitors"
+    db = MonitorDB(config.db_url, table_name)
+    db._do_sql(
+        f"CREATE TABLE {table_name}("
+        "channel_id bigint not null,"
+        "twitter_id bigint not null,"
+        "twitter_name text not null,"
+        "match_ptn text,"
+        "PRIMARY KEY(channel_id, twitter_id)"
+        ");"
+    )
+    yield db
+    db._do_sql(f"DROP TABLE {table_name};")
+
+
+@pytest.fixture(scope="function")
+def empty_monitor_db(_empty_db_with_monitor_table):
+    db = _empty_db_with_monitor_table
+    yield db
+    # Clean up table
+    db._do_sql(f"DELETE FROM {db.table_name};")
 
 
 class TestBotClient:
-    def test_initialize_invalid_consumer_key(self, config):
-        with pytest.raises(ValueError, match=r"Failed to authenticate twitter api\."):
-            BotClient(
-                "INVALID_CONSUMER_KEY",
-                config.consumer_secret,
-                config.access_token,
-                config.access_secret,
-            )
-
-    def test_initialize_invalid_consumer_secret(self, config):
-        with pytest.raises(ValueError, match=r"Failed to authenticate twitter api\."):
-            BotClient(
-                config.consumer_key,
-                "INVALID_CONSUMER_SECRET",
-                config.access_token,
-                config.access_secret,
-            )
-
-    def test_initialize_invalid_access_token(self, config):
-        with pytest.raises(ValueError, match=r"Failed to authenticate twitter api\."):
-            BotClient(
-                config.consumer_key,
-                config.consumer_secret,
-                "INVALID_ACCESS_TOKEN",
-                config.access_secret,
-            )
-
-    def test_initialize_invalid_access_secret(self, config):
-        with pytest.raises(ValueError, match=r"Failed to authenticate twitter api\."):
-            BotClient(
-                config.consumer_key,
-                config.consumer_secret,
-                config.access_token,
-                "INVALID_ACCESS_SECRET",
-            )
-
     def test_invalid_main_command(self, config):
-        assert eval_send_messages(config, ["!tcc add"], [], 5)
+        assert eval_send_messages(config, empty_monitor_db, ["!tcc add"], [], 5)
 
-    def test_add_command_exist_account(self, config):
-        monitor_db = MockMonitorDB()
+    # add command
+    def test_add_exist_account(self, config, empty_monitor_db: MonitorDB):
         assert eval_send_messages(
             config,
+            empty_monitor_db,
             ["!tc add tt4bot"],
             [r"^\[INFO\] アカウントの登録に成功しました．アカウント名: tt4bot, 正規表現: None$"],
             5,
         )
 
-    def test_add_command_not_exist_account(self, config):
+    def test_add_not_exist_account(self, config, empty_monitor_db):
         assert eval_send_messages(
             config,
+            empty_monitor_db,
             ["!tc add NON_EXSITING_ACCOUNT_202102211456"],
             [r"^\[ERROR\] 存在しないアカウントです．アカウント名: NON_EXSITING_ACCOUNT_202102211456$"],
             5,
         )
 
-    def test_add_command_already_added_account(self, config):
+    def test_add_account_twice(self, config, empty_monitor_db):
         assert eval_send_messages(
             config,
+            empty_monitor_db,
             ["!tc add tt4bot", "!tc add tt4bot"],
             [
                 r"^\[INFO\] アカウントの登録に成功しました．アカウント名: tt4bot, 正規表現: None$",
+                r"^\[ERROR\] 既に登録されているアカウントです．アカウント名: tt4bot$",
+            ],
+            5,
+        )
+
+    def test_add_account_in_db(self, config, empty_monitor_db):
+        db = empty_monitor_db
+        db.insert(config.test_channel_id, TT4BOT_USER_ID, "tt4bot", None)
+        assert eval_send_messages(
+            config,
+            db,
+            ["!tc add tt4bot"],
+            [
                 r"^\[ERROR\] 既に登録されているアカウントです．アカウント名: tt4bot$",
             ],
             5,

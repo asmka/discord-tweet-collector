@@ -7,7 +7,7 @@ authors = ["dff9th <dff9th@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.9"
 discord = "^1.0.1"
-tweepy = "^3.10.0"
+tweepy = {git = "https://github.com/tweepy/tweepy.git"}
 
 [tool.poetry.dev-dependencies]
 jedi = "^0.18.0"

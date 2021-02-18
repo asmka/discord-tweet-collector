@@ -1,0 +1,2 @@
+class TCBotError(Exception):
+    pass

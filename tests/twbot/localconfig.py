@@ -1,16 +1,19 @@
-import os
 import json
 
 
-class Config:
+class LocalConfig:
     def __init__(self, file_name: str):
         conf_dic = {}
         with open(file_name) as f:
             conf_dic = json.load(f)
 
-        if "bot_token" not in conf_dic:
-            raise ValueError("bot_token is not in config file")
-        self.bot_token = conf_dic["bot_token"]
+        if "test_bot_token" not in conf_dic:
+            raise ValueError("test_bot_token is not in config file")
+        self.test_bot_token = conf_dic["test_bot_token"]
+
+        if "eval_bot_token" not in conf_dic:
+            raise ValueError("eval_bot_token is not in config file")
+        self.eval_bot_token = conf_dic["eval_bot_token"]
 
         if "consumer_key" not in conf_dic:
             raise ValueError("consumer_key is not in config file")
@@ -28,12 +31,18 @@ class Config:
             raise ValueError("access_secret is not in config file")
         self.access_secret = conf_dic["access_secret"]
 
+        if "test_channel_id" not in conf_dic:
+            raise ValueError("test_channel_id is not in config file")
+        self.test_channel_id = conf_dic["test_channel_id"]
+
         expected_keys = [
-            "bot_token",
+            "test_bot_token",
+            "eval_bot_token",
             "consumer_key",
             "consumer_secret",
             "access_token",
             "access_secret",
+            "test_channel_id",
         ]
         for k in conf_dic.keys():
             if k not in expected_keys:

@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import List, Tuple
+from typing import List, Dict, Any
 
 import tweepy
 import discord
@@ -13,6 +13,7 @@ from .twauth import TwitterAuth
 class TweetCollectStream(tweepy.Stream):
     def __init__(
         self,
+        client: discord.Client,
         tw_auth: TwitterAuth,
         monitor_db: MonitorDB,
         loop,
@@ -24,16 +25,20 @@ class TweetCollectStream(tweepy.Stream):
             tw_auth.access_secret,
         )
 
+        self.client = client
         self.monitor_db = monitor_db
         self.loop = loop
         self.thread = None
         self.user_id_map = None
 
     def resume(self):
-        monitors = self.monitor_db.select_all()
-        user_id_map = {}
+        monitors: Dict[str:Any] = self.monitor_db.select_all()
+        user_id_map: Dict[int : List[Dict[str:Any]]] = {}
         for m in monitors:
-            user_id_map[m["twitter_id"]] = m
+            tid = m["twitter_id"]
+            if tid not in user_id_map:
+                user_id_map[tid] = []
+            user_id_map[tid].append(m)
 
         if self.thread:
             self.disconnect()
@@ -69,10 +74,11 @@ class TweetCollectStream(tweepy.Stream):
                 logger.debug(
                     "[DEBUG] status.text is not matched with regular expression"
                 )
-                return
+                continue
 
             url = f"https://twitter.com/{status.user.screen_name}/status/{status.id}"
-            future = asyncio.run_coroutine_threadsafe(m.channel.send(url), self.loop)
+            channel = self.client.get_channel(m["channel_id"])
+            future = asyncio.run_coroutine_threadsafe(channel.send(url), self.loop)
             future.result()
 
     def on_error(self, status):

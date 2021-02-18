@@ -1,7 +1,10 @@
 import sys
 
 from .logger import logger
+from .exception import TCBotError
 from .config import Config
+from .monitordb import MonitorDB
+from .twauth import TwitterAuth
 from .botcli import BotClient
 
 
@@ -20,7 +23,7 @@ def main():
     # Parse config file
     try:
         config = Config(config_file)
-    except Exception as exc:
+    except TCBotError:
         logger.exception("[ERROR] Recieve Exception")
         logger.error("[ERROR] Config file is invalid")
         print(
@@ -29,13 +32,15 @@ def main():
         )
         sys.exit(1)
 
-    # Run bot
-    bot_cli = BotClient(
+    monitor_db = MonitorDB(config.db_url, "monitors")
+    tw_auth = TwitterAuth(
         config.consumer_key,
         config.consumer_secret,
         config.access_token,
         config.access_secret,
     )
+    # Run bot
+    bot_cli = BotClient(monitor_db, tw_auth)
     bot_cli.run(config.bot_token)
 
 

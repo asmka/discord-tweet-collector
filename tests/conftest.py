@@ -2,6 +2,8 @@ import json
 
 import pytest
 
+from tcbot.exception import TCBotError
+
 
 class ConfigForTest:
     def __init__(self, file_name: str):
@@ -10,35 +12,35 @@ class ConfigForTest:
             conf_dic = json.load(f)
 
         if "test_bot_token" not in conf_dic:
-            raise ValueError("test_bot_token is not in config file")
+            raise TCBotError("test_bot_token is not in config file.")
         self.test_bot_token = conf_dic["test_bot_token"]
 
         if "eval_bot_token" not in conf_dic:
-            raise ValueError("eval_bot_token is not in config file")
+            raise TCBotError("eval_bot_token is not in config file.")
         self.eval_bot_token = conf_dic["eval_bot_token"]
 
         if "consumer_key" not in conf_dic:
-            raise ValueError("consumer_key is not in config file")
+            raise TCBotError("consumer_key is not in config file.")
         self.consumer_key = conf_dic["consumer_key"]
 
         if "consumer_secret" not in conf_dic:
-            raise ValueError("consumer_secret is not in config file")
+            raise TCBotError("consumer_secret is not in config file.")
         self.consumer_secret = conf_dic["consumer_secret"]
 
         if "access_token" not in conf_dic:
-            raise ValueError("access_token is not in config file")
+            raise TCBotError("access_token is not in config file.")
         self.access_token = conf_dic["access_token"]
 
         if "access_secret" not in conf_dic:
-            raise ValueError("access_secret is not in config file")
+            raise TCBotError("access_secret is not in config file.")
         self.access_secret = conf_dic["access_secret"]
 
         if "test_channel_id" not in conf_dic:
-            raise ValueError("test_channel_id is not in config file")
+            raise TCBotError("test_channel_id is not in config file.")
         self.test_channel_id = conf_dic["test_channel_id"]
 
         if "db_url" not in conf_dic:
-            raise ValueError("db_url is not in config file")
+            raise TCBotError("db_url is not in config file.")
         self.db_url = conf_dic["db_url"]
 
         expected_keys = [
@@ -53,7 +55,7 @@ class ConfigForTest:
         ]
         for k in conf_dic.keys():
             if k not in expected_keys:
-                raise ValueError(f"Invalid parameter is included (param: {k})")
+                raise TCBotError(f"Invalid parameter is included. param: {k}")
 
 
 def pytest_addoption(parser):

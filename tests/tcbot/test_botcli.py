@@ -40,7 +40,7 @@ def empty_monitor_db(_empty_db_with_monitor_table):
 
 
 class TestBotClient:
-    def test_invalid_main_command(self, config):
+    def test_invalid_main_command(self, config, empty_monitor_db):
         assert eval_send_messages(config, empty_monitor_db, ["!tcc add"], [], 5)
 
     # add command

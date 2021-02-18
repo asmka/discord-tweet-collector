@@ -21,18 +21,22 @@ class BotClient(discord.Client):
         tw_auth: TwitterAuth,
         loop=None,
     ):
+        if loop is None:
+            self.loop = asyncio.get_event_loop()
+        else:
+            self.loop = loop
 
         self.monitor_db = monitor_db
         self.tw_auth = tw_auth
-        self.loop = loop
 
         self.stream = TweetCollectStream(
+            self,
             self.tw_auth,
             self.monitor_db,
             self.loop,
         )
 
-        super().__init__(loop=loop)
+        super().__init__(loop=self.loop)
 
     def _add(self, channel, args: List[str]) -> Tuple[str, str]:
         screen_name = args[0] if len(args) > 0 else None
@@ -75,6 +79,9 @@ class BotClient(discord.Client):
         await super().close()
         self.stream.disconnect()
         self.stream = None
+
+    async def on_ready(self):
+        self.stream.resume()
 
     async def on_message(self, msg):
         if msg.author == self.user:

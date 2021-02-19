@@ -2,5 +2,6 @@
   "bot_token": "",
   "consumer_key": "",
   "consumer_secret": "",
-  "access_secret": ""
+  "access_secret": "",
+  "db_url": ""
 }

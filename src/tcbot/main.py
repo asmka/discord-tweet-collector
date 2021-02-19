@@ -1,4 +1,5 @@
 import sys
+import argparse
 
 from .logger import logger
 from .exception import TCBotError
@@ -9,36 +10,29 @@ from .botcli import BotClient
 
 
 def main():
-    # Check arguments
-    args = sys.argv
-    if len(args) != 2:
-        print(
-            f"[ERROR] Usage: python {__file__} <config file>",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    # Parse arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--conf", metavar="FILEPATH", help="config json file")
+    args = parser.parse_args()
 
-    config_file = args[1]
+    config_file = args.conf
 
     # Parse config file
     try:
-        config = Config(config_file)
-    except TCBotError:
+        config = Config(file_name=config_file)
+    except TCBotError as exc:
         logger.exception("Catch Exception")
-        logger.error("Config file is invalid.")
-        print(
-            f"[ERROR] Config file is invalid.",
-            file=sys.stderr,
-        )
+        logger.error(str(exc))
         sys.exit(1)
 
-    monitor_db = MonitorDB(config.db_url, "monitors")
+    monitor_db = MonitorDB(config.db_url, config.db_table)
     tw_auth = TwitterAuth(
         config.consumer_key,
         config.consumer_secret,
         config.access_token,
         config.access_secret,
     )
+
     # Run bot
     bot_cli = BotClient(monitor_db, tw_auth)
     bot_cli.run(config.bot_token)

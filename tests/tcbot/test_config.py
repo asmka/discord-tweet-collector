@@ -53,6 +53,10 @@ class TestConfig:
         with pytest.raises(TCBotError, match=r"^db_url is not in config file\.$"):
             Config(cpath / "config/with_no_db_url_param.json")
 
+    def test_initialize_with_no_db_table_param(self):
+        with pytest.raises(TCBotError, match=r"^db_table is not in config file\.$"):
+            Config(cpath / "config/with_no_db_table_param.json")
+
     def test_initialize_with_invalid_param(self):
         with pytest.raises(
             TCBotError, match=r"Invalid parameter is included. param: .+$"

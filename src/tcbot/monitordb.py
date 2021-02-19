@@ -30,35 +30,44 @@ class MonitorDB:
             except psycopg2.ProgrammingError:
                 return None
 
-    def select(self, channel_id: int, twitter_id: int) -> List[Dict]:
-        return self._do_sql(
-            f"SELECT * FROM {self.table_name} "
-            f"WHERE channel_id = {channel_id} AND twitter_id = {twitter_id};"
-        )
+    def select(self, channel_id: int = None, twitter_id: int = None) -> List[Dict]:
+        table_name = self.table_name
+        monitors: List[Dict] = []
 
-    def select_all(self) -> List[Dict]:
-        return self._do_sql(f"SELECT * FROM {self.table_name};")
+        if channel_id is None and twitter_id is None:
+            monitors = self._do_sql(f"SELECT * FROM {table_name};")
+        elif channel_id is None:
+            monitors = self._do_sql(
+                f"SELECT * FROM {table_name} WHERE twitter_id = {twitter_id};"
+            )
+        elif twitter_id is None:
+            monitors = self._do_sql(
+                f"SELECT * FROM {table_name} WHERE channel_id = {channel_id};"
+            )
+        else:
+            monitors = self._do_sql(
+                f"SELECT * FROM {table_name} "
+                f"WHERE channel_id = {channel_id} AND twitter_id = {twitter_id};"
+            )
 
-    def insert(
-        self, channel_id: int, twitter_id: int, twitter_name: str, match_ptn: str
-    ):
+        return monitors
+
+    def insert(self, channel_id: int, twitter_id: int, match_ptn: str):
         try:
             self._do_sql(
-                f"INSERT INTO {self.table_name} VALUES (%s, %s, %s, %s);"
+                f"INSERT INTO {self.table_name} VALUES (%s, %s, %s);"
                 % (
                     "null" if channel_id is None else channel_id,
                     "null" if twitter_id is None else twitter_id,
-                    "null" if twitter_name is None else f"'{twitter_name}'",
                     "null" if match_ptn is None else f"'{match_ptn}'",
                 )
             )
         except psycopg2.Error as exc:
             raise TCBotError(
-                "Failed to insert a row. row: (%s, %s, %s, %s)"
+                "Failed to insert a row. row: (%s, %s, %s)"
                 % (
                     "null" if channel_id is None else channel_id,
                     "null" if twitter_id is None else twitter_id,
-                    "null" if twitter_name is None else f"'{twitter_name}'",
                     "null" if match_ptn is None else f"'{match_ptn}'",
                 )
             ) from exc

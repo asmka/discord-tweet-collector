@@ -10,6 +10,7 @@ from tcbot.twauth import TwitterAuth
 from evalcli import eval_send_messages
 
 TT4BOT_USER_ID = 1359637846919847937
+TWITTER_JP_USER_ID = 7080152
 
 
 @pytest.fixture(scope="module")
@@ -20,7 +21,6 @@ def _empty_db_with_monitor_table(config):
         f"CREATE TABLE {table_name}("
         "channel_id bigint not null,"
         "twitter_id bigint not null,"
-        "twitter_name text not null,"
         "match_ptn text,"
         "PRIMARY KEY(channel_id, twitter_id)"
         ");"
@@ -51,6 +51,17 @@ class TestBotClient:
             5,
         )
 
+    def test_add_exist_account_with_regular_expression(
+        self, config, empty_monitor_db: MonitorDB
+    ):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            [r"!tc add tt4bot 'mildom\.com'"],
+            [r"^\[INFO\] アカウントの登録に成功しました．アカウント名: tt4bot, 正規表現: 'mildom\\\\\.com'$"],
+            5,
+        )
+
     def test_add_not_exist_account(self, config, empty_monitor_db):
         assert eval_send_messages(
             config,
@@ -74,7 +85,7 @@ class TestBotClient:
 
     def test_add_account_in_db(self, config, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(config.test_channel_id, TT4BOT_USER_ID, "tt4bot", None)
+        db.insert(config.test_channel_id, TT4BOT_USER_ID, None)
         assert eval_send_messages(
             config,
             db,
@@ -95,7 +106,7 @@ class TestBotClient:
 
     def test_remove_account_in_db(self, config, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(config.test_channel_id, TT4BOT_USER_ID, "tt4bot", None)
+        db.insert(config.test_channel_id, TT4BOT_USER_ID, None)
         assert eval_send_messages(
             config,
             db,
@@ -119,5 +130,53 @@ class TestBotClient:
             empty_monitor_db,
             ["!tc remove tt4bot"],
             [r"^\[ERROR\] 登録されていないアカウントです．アカウント名: tt4bot$"],
+            5,
+        )
+
+    # list command
+    def test_list_with_empty_accounts(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc list"],
+            [r"^\[INFO\] 登録済みのアカウントはありません．$"],
+            5,
+        )
+
+    def test_list_with_one_added_account(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc add tt4bot", "!tc list"],
+            [r"^\[INFO\] 登録済みのアカウント:" r"\r・アカウント名: tt4bot, 正規表現: None$"],
+            5,
+        )
+
+    def test_list_with_two_added_accounts(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc add tt4bot", r"!tc add TwitterJP 'mildom\.com'", "!tc list"],
+            [
+                r"^\[INFO\] 登録済みのアカウント:"
+                r"\r・アカウント名: tt4bot, 正規表現: None"
+                r"\r・アカウント名: TwitterJP, 正規表現: 'mildom\\\\\.com'$"
+            ],
+            5,
+        )
+
+    def test_list_with_two_accounts_in_db(self, config, empty_monitor_db):
+        db = empty_monitor_db
+        db.insert(config.test_channel_id, TT4BOT_USER_ID, None)
+        db.insert(config.test_channel_id, TWITTER_JP_USER_ID, r"mildom\.com")
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc list"],
+            [
+                r"^\[INFO\] 登録済みのアカウント:"
+                r"\r・アカウント名: tt4bot, 正規表現: None"
+                r"\r・アカウント名: TwitterJP, 正規表現: 'mildom\\\\\.com'$"
+            ],
             5,
         )

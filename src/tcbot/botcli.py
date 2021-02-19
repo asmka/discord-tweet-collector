@@ -49,7 +49,12 @@ class BotClient(discord.Client):
             self.loop,
         )
         monitor_users = list(map(str, self.stream.user_id_map.keys()))
-        self.stream.filter(follow=monitor_users, threaded=True)
+        if monitor_users:
+            self.stream.filter(follow=monitor_users, threaded=True)
+
+    async def _send_message(self, channel_id: int, msg: str):
+        channel = self.get_channel(channel_id)
+        await channel.send(msg)
 
     def _add(self, channel_id: int, args: List[str]) -> Tuple[str, str]:
         screen_name = args[0] if len(args) > 0 else None
@@ -74,11 +79,11 @@ class BotClient(discord.Client):
                 raise TCBotError(f"正規表現が不正です．正規表現: {match_ptn}") from exc
 
         # Raise exception if the account is already registered
-        if self.monitor_db.select(channel_id, twitter_id):
+        if self.monitor_db.select(channel_id=channel_id, twitter_id=twitter_id):
             raise TCBotError(f"既に登録されているアカウントです．アカウント名: {screen_name}")
 
         # Update database
-        self.monitor_db.insert(channel_id, twitter_id, screen_name, match_ptn)
+        self.monitor_db.insert(channel_id, twitter_id, match_ptn)
 
         # Rerun stream
         self._resume_stream()
@@ -100,7 +105,7 @@ class BotClient(discord.Client):
             twitter_id = status.id
 
         # Raise exception if the account is not registered
-        if not self.monitor_db.select(channel_id, twitter_id):
+        if not self.monitor_db.select(channel_id=channel_id, twitter_id=twitter_id):
             raise TCBotError(f"登録されていないアカウントです．アカウント名: {screen_name}")
 
         # Update database
@@ -111,6 +116,18 @@ class BotClient(discord.Client):
 
         return screen_name
 
+    def _list(self, channel_id: int) -> List[Tuple[str, str]]:
+        monitor_users = []
+
+        monitors = self.monitor_db.select(channel_id=channel_id)
+        for m in monitors:
+            twitter_id = m["twitter_id"]
+            match_ptn = m["match_ptn"]
+            twitter_name = self.tw_auth.api.get_user(id=twitter_id).screen_name
+            monitor_users.append((twitter_name, match_ptn))
+
+        return monitor_users
+
     async def close(self):
         if not self.is_ready():
             raise Exception("Called close() before client is ready.")
@@ -120,10 +137,6 @@ class BotClient(discord.Client):
             self.stream = None
 
         await super().close()
-
-    async def _send_message(self, channel_id: int, msg: str):
-        channel = self.get_channel(channel_id)
-        await channel.send(msg)
 
     async def send_info(self, channel_id: int, msg: str):
         await self._send_message(channel_id, f"[INFO] {msg}")
@@ -158,7 +171,7 @@ class BotClient(discord.Client):
         # Receive add command
         if subcmd == ADD_CMD:
             try:
-                user_name, match_ptn = self._add(channel_id, cmdlist[2:])
+                twitter_name, match_ptn = self._add(channel_id, cmdlist[2:])
             except TCBotError as exc:
                 logger.exception("Catch Exception")
                 logger.error(str(exc))
@@ -166,32 +179,36 @@ class BotClient(discord.Client):
             else:
                 await self.send_info(
                     channel_id,
-                    f"アカウントの登録に成功しました．アカウント名: {user_name}, 正規表現: {repr(match_ptn)}",
+                    f"アカウントの登録に成功しました．アカウント名: {twitter_name}, 正規表現: {repr(match_ptn)}",
                 )
         # Receive remove command
         elif subcmd == REMOVE_CMD:
             try:
-                user_name = self._remove(channel_id, cmdlist[2:])
+                twitter_name = self._remove(channel_id, cmdlist[2:])
             except TCBotError as exc:
                 logger.exception("Catch Exception")
                 logger.error(str(exc))
                 await self.send_error(channel_id, str(exc))
             else:
-                await self.send_info(
-                    channel_id,
-                    f"アカウントの削除に成功しました．アカウント名: {user_name}",
-                )
-
-        ## Receive list command
-        # elif subcmd == "list":
-        #    imsg = f"[INFO] 登録済みのアカウントはありません"
-        #    if cid in self.bot_writer.user_list and self.bot_writer.user_list[cid]:
-        #        imsg = f"[INFO] 登録済みのアカウント:"
-        #        for screen_name in self.bot_writer.user_list[cid]:
-        #            imsg += f"\r・{screen_name}"
-        #            if self.bot_writer.writers[(cid, screen_name)].match_ptn:
-        #                imsg += f" (正規表現: {repr(self.bot_writer.writers[(cid, screen_name)].match_ptn)})"
-        #    await msg.channel.send(imsg)
+                text = f"アカウントの削除に成功しました．アカウント名: {twitter_name}"
+                await self.send_info(channel_id, text)
+        # Receive list command
+        elif subcmd == LIST_CMD:
+            try:
+                monitor_users: List[Tuple[str, str]] = self._list(channel_id)
+            except TCBotError as exc:
+                logger.exception("Catch Exception")
+                logger.error(str(exc))
+                await self.send_error(channel_id, str(exc))
+            else:
+                if monitor_users:
+                    text = f"登録済みのアカウント:"
+                    for twitter_name, match_ptn in monitor_users:
+                        text += f"\r・アカウント名: {twitter_name}, 正規表現: {repr(match_ptn)}"
+                    await self.send_info(channel_id, text)
+                else:
+                    text = f"登録済みのアカウントはありません．"
+                    await self.send_info(channel_id, text)
 
         ## Receive help command
         # elif subcmd == "help":

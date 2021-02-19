@@ -32,7 +32,7 @@ class TweetCollectStream(tweepy.Stream):
         self.user_id_map = None
 
         # Create a monitor dictonary searched from twitter id
-        monitors: List[Dict[str:Any]] = monitor_db.select_all()
+        monitors: List[Dict[str:Any]] = monitor_db.select()
         user_id_map: Dict[int : List[Dict[str:Any]]] = {}
         for m in monitors:
             tid = m["twitter_id"]

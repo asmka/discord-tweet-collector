@@ -12,7 +12,6 @@ def _empty_db_with_monitor_table(config):
         f"CREATE TABLE {table_name}("
         "channel_id bigint not null,"
         "twitter_id bigint not null,"
-        "twitter_name text not null,"
         "match_ptn text,"
         "PRIMARY KEY(channel_id, twitter_id)"
         ");"
@@ -45,93 +44,82 @@ class TestMonitorDB:
         db = empty_monitor_db
         with pytest.raises(
             TCBotError,
-            match=r"^Failed to insert a row\. row: \(null, 456, 'twname', 'pattern'\)$",
+            match=r"^Failed to insert a row\. row: \(null, 456, 'pattern'\)$",
         ):
-            db.insert(None, 456, "twname", "pattern")
+            db.insert(None, 456, "pattern")
 
     def test_insert_invalid_channel_id_with_string(self, empty_monitor_db):
         db = empty_monitor_db
         with pytest.raises(
             TCBotError,
-            match=r"^Failed to insert a row\. row: \(abc, 456, 'twname', 'pattern'\)$",
+            match=r"^Failed to insert a row\. row: \(abc, 456, 'pattern'\)$",
         ):
-            db.insert("abc", 456, "twname", "pattern")
+            db.insert("abc", 456, "pattern")
 
     def test_insert_invalid_twitter_id_with_None(self, empty_monitor_db):
         db = empty_monitor_db
         with pytest.raises(
             TCBotError,
-            match=r"^Failed to insert a row\. row: \(123, null, 'twname', 'pattern'\)$",
+            match=r"^Failed to insert a row\. row: \(123, null, 'pattern'\)$",
         ):
-            db.insert(123, None, "twname", "pattern")
+            db.insert(123, None, "pattern")
 
     def test_insert_invalid_twitter_id_with_string(self, empty_monitor_db):
         db = empty_monitor_db
         with pytest.raises(
             TCBotError,
-            match=r"^Failed to insert a row\. row: \(123, def, 'twname', 'pattern'\)$",
+            match=r"^Failed to insert a row\. row: \(123, def, 'pattern'\)$",
         ):
-            db.insert(123, "def", "twname", "pattern")
-
-    def test_insert_invalid_twitter_name_with_None(self, empty_monitor_db):
-        db = empty_monitor_db
-        with pytest.raises(
-            TCBotError,
-            match=r"^Failed to insert a row\. row: \(123, 456, null, 'pattern'\)$",
-        ):
-            db.insert(123, 456, None, "pattern")
+            db.insert(123, "def", "pattern")
 
     def test_insert_match_ptn_with_None(self, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(123, 456, "twname", None)
-        assert db.select_all() == [
+        db.insert(123, 456, None)
+        assert db.select() == [
             {
                 "channel_id": 123,
                 "twitter_id": 456,
-                "twitter_name": "twname",
                 "match_ptn": None,
             }
         ]
 
     def test_insert_match_ptn_with_string(self, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(123, 456, "twname", r"mildom\.com")
-        assert db.select_all() == [
+        db.insert(123, 456, r"mildom\.com")
+        assert db.select() == [
             {
                 "channel_id": 123,
                 "twitter_id": 456,
-                "twitter_name": "twname",
                 "match_ptn": r"mildom\.com",
             }
         ]
 
     def test_insert_duplicate_primary_key(self, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(123, 456, "twname", r"1st mildom\.com")
+        db.insert(123, 456, r"1st mildom\.com")
         with pytest.raises(
             TCBotError,
-            match=r"^Failed to insert a row\. row: \(123, 456, 'twname', '2nd mildom\\\.com'\)$",
+            match=r"^Failed to insert a row\. row: \(123, 456, '2nd mildom\\\.com'\)$",
         ):
-            db.insert(123, 456, "twname", r"2nd mildom\.com")
+            db.insert(123, 456, r"2nd mildom\.com")
 
     # DELETE
     def test_delete_exist_row(self, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(123, 456, "twname", r"mildom\.com")
+        db.insert(123, 456, r"mildom\.com")
         db.delete(123, 456)
-        assert db.select_all() == []
+        assert db.select() == []
 
     def test_delete_non_exist_row(self, empty_monitor_db):
         db = empty_monitor_db
-        db.insert(123, 456, "twname", r"mildom\.com")
+        db.insert(123, 456, r"mildom\.com")
         db.delete(123, 654)
         db.delete(321, 456)
         db.delete(456, 123)
-        assert db.select_all() == [
+        assert db.select() == [
             {
                 "channel_id": 123,
                 "twitter_id": 456,
-                "twitter_name": "twname",
                 "match_ptn": r"mildom\.com",
             }
         ]

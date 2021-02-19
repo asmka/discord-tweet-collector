@@ -180,3 +180,29 @@ class TestBotClient:
             ],
             5,
         )
+
+    def test_help(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc help"],
+            [
+                r"^\[INFO\] コマンド仕様:"
+                r"\r・!tc add <アカウント名> \[<正規表現パターン>\]: 収集対象のアカウントを登録"
+                r"\r　例: !tc add moujaatumare 'mildom\\\\\.com'"
+                r"\r　動作: 'mildom\.com'を含むなるおのツイートのみ抽出（短縮リンクは展開）"
+                r"\r・!tc remove <アカウント名>: 登録済みのアカウントを削除"
+                r"\r・!tc list: 登録済みのアカウントの一覧表示"
+                r"\r・!tc help: コマンド仕様を表示$"
+            ],
+            5,
+        )
+
+    def test_invalid_command(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc invalid_command"],
+            [r"^\[ERROR\] コマンドが不正です．'!tc help'を参照してください．$"],
+            5,
+        )

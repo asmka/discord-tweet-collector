@@ -17,6 +17,7 @@ MAIN_CMD = "!tc"
 ADD_CMD = "add"
 REMOVE_CMD = "remove"
 LIST_CMD = "list"
+HELP_CMD = "help"
 
 
 class BotClient(discord.Client):
@@ -164,11 +165,11 @@ class BotClient(discord.Client):
         maincmd = cmdlist[0] if len(cmdlist) > 0 else None
         subcmd = cmdlist[1] if len(cmdlist) > 1 else None
 
-        # Do nothing when message has no '!tc'
+        # Do nothing when message has no MAIN_CMD
         if maincmd != MAIN_CMD:
             return
 
-        # Receive add command
+        # Receive ADD_CMD
         if subcmd == ADD_CMD:
             try:
                 twitter_name, match_ptn = self._add(channel_id, cmdlist[2:])
@@ -181,7 +182,7 @@ class BotClient(discord.Client):
                     channel_id,
                     f"アカウントの登録に成功しました．アカウント名: {twitter_name}, 正規表現: {repr(match_ptn)}",
                 )
-        # Receive remove command
+        # Receive REMOVE_CMD
         elif subcmd == REMOVE_CMD:
             try:
                 twitter_name = self._remove(channel_id, cmdlist[2:])
@@ -192,7 +193,7 @@ class BotClient(discord.Client):
             else:
                 text = f"アカウントの削除に成功しました．アカウント名: {twitter_name}"
                 await self.send_info(channel_id, text)
-        # Receive list command
+        # Receive LIST_CMD
         elif subcmd == LIST_CMD:
             try:
                 monitor_users: List[Tuple[str, str]] = self._list(channel_id)
@@ -209,19 +210,18 @@ class BotClient(discord.Client):
                 else:
                     text = f"登録済みのアカウントはありません．"
                     await self.send_info(channel_id, text)
-
-        ## Receive help command
-        # elif subcmd == "help":
-        #    imsg = f"[INFO] コマンド仕様:"
-        #    imsg += f"\r・!tw add <アカウント名> [<正規表現パターン>]: 収集対象のアカウントを登録"
-        #    imsg += f'\r　例: !tw add moujaatumare "#mildom" (#mildomを含むツイートのみ抽出)'
-        #    imsg += f"\r・!tw remove <アカウント名>: 登録済みのアカウントを削除"
-        #    imsg += f"\r・!tw list : 登録済みのアカウントの一覧表示"
-        #    imsg += f"\r・!tw help : コマンド仕様を表示"
-        #    await msg.channel.send(imsg)
-
-        ## Receive invalid command
-        # else:
-        #    emsg = f'[ERROR] コマンドが不正です ("!tw help"を参照)'
-        #    logger.error(emsg)
-        #    await msg.channel.send(emsg)
+        # Receive HELP_CMD
+        elif subcmd == HELP_CMD:
+            text = "コマンド仕様:"
+            text += f"\r・{MAIN_CMD} {ADD_CMD} <アカウント名> [<正規表現パターン>]: 収集対象のアカウントを登録"
+            text += f"\r　例: {MAIN_CMD} {ADD_CMD} moujaatumare %s" % repr(r"mildom\.com")
+            text += f"\r　動作: 'mildom.com'を含むなるおのツイートのみ抽出（短縮リンクは展開）"
+            text += f"\r・{MAIN_CMD} {REMOVE_CMD} <アカウント名>: 登録済みのアカウントを削除"
+            text += f"\r・{MAIN_CMD} {LIST_CMD}: 登録済みのアカウントの一覧表示"
+            text += f"\r・{MAIN_CMD} {HELP_CMD}: コマンド仕様を表示"
+            await self.send_info(channel_id, text)
+        # Receive invalid command
+        else:
+            text = f"コマンドが不正です．'{MAIN_CMD} {HELP_CMD}'を参照してください．"
+            logger.error(text)
+            await self.send_error(channel_id, text)

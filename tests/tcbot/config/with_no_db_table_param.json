@@ -1,8 +1,8 @@
 {
   "bot_token": "",
+  "consumer_key": "",
   "consumer_secret": "",
   "access_token": "",
   "access_secret": "",
-  "db_url": "",
-  "db_table": ""
+  "db_url": ""
 }

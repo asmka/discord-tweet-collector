@@ -15,10 +15,9 @@ TWITTER_JP_USER_ID = 7080152
 
 @pytest.fixture(scope="module")
 def _empty_db_with_monitor_table(config):
-    table_name = "test_monitors"
-    db = MonitorDB(config.db_url, table_name)
+    db = MonitorDB(config.db_url, config.db_table)
     db._do_sql(
-        f"CREATE TABLE {table_name}("
+        f"CREATE TABLE {config.db_table}("
         "channel_id bigint not null,"
         "twitter_id bigint not null,"
         "match_ptn text,"
@@ -26,7 +25,7 @@ def _empty_db_with_monitor_table(config):
         ");"
     )
     yield db
-    db._do_sql(f"DROP TABLE {table_name};")
+    db._do_sql(f"DROP TABLE {config.db_table};")
 
 
 @pytest.fixture(scope="function")

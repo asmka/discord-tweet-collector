@@ -3,5 +3,6 @@
   "consumer_key": "",
   "consumer_secret": "",
   "access_secret": "",
-  "db_url": ""
+  "db_url": "",
+  "db_table": ""
 }

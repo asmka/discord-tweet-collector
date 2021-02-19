@@ -11,51 +11,47 @@ class ConfigForTest:
         with open(file_name) as f:
             conf_dic = json.load(f)
 
-        if "test_bot_token" not in conf_dic:
-            raise TCBotError("test_bot_token is not in config file.")
-        self.test_bot_token = conf_dic["test_bot_token"]
+        TEST_BOT_TOKEN_PARAM = "test_bot_token"
+        EVAL_BOT_TOKEN_PARAM = "eval_bot_token"
+        TEST_CHANNEL_ID = "test_channel_id"
+        CONSUMER_KEY_PARAM = "consumer_key"
+        CONSUMER_SECRET_PARAM = "consumer_secret"
+        ACCESS_TOKEN_PARAM = "access_token"
+        ACCESS_SECRET_PARAM = "access_secret"
+        DB_URL_PARAM = "db_url"
+        DB_TABLE_PARAM = "db_table"
 
-        if "eval_bot_token" not in conf_dic:
-            raise TCBotError("eval_bot_token is not in config file.")
-        self.eval_bot_token = conf_dic["eval_bot_token"]
+        EXPECTED_PARAMS = (
+            TEST_BOT_TOKEN_PARAM,
+            EVAL_BOT_TOKEN_PARAM,
+            TEST_CHANNEL_ID,
+            CONSUMER_KEY_PARAM,
+            CONSUMER_SECRET_PARAM,
+            ACCESS_TOKEN_PARAM,
+            ACCESS_SECRET_PARAM,
+            DB_URL_PARAM,
+            DB_TABLE_PARAM,
+        )
 
-        if "consumer_key" not in conf_dic:
-            raise TCBotError("consumer_key is not in config file.")
-        self.consumer_key = conf_dic["consumer_key"]
+        # Check required parameter exist
+        for param in EXPECTED_PARAMS:
+            if param not in conf_dic:
+                raise TCBotError(f"{param} is not in config file.")
 
-        if "consumer_secret" not in conf_dic:
-            raise TCBotError("consumer_secret is not in config file.")
-        self.consumer_secret = conf_dic["consumer_secret"]
+        self.test_bot_token = conf_dic[TEST_BOT_TOKEN_PARAM]
+        self.eval_bot_token = conf_dic[EVAL_BOT_TOKEN_PARAM]
+        self.test_channel_id = conf_dic[TEST_CHANNEL_ID]
+        self.consumer_key = conf_dic[CONSUMER_KEY_PARAM]
+        self.consumer_secret = conf_dic[CONSUMER_SECRET_PARAM]
+        self.access_token = conf_dic[ACCESS_TOKEN_PARAM]
+        self.access_secret = conf_dic[ACCESS_SECRET_PARAM]
+        self.db_url = conf_dic[DB_URL_PARAM]
+        self.db_table = conf_dic[DB_TABLE_PARAM]
 
-        if "access_token" not in conf_dic:
-            raise TCBotError("access_token is not in config file.")
-        self.access_token = conf_dic["access_token"]
-
-        if "access_secret" not in conf_dic:
-            raise TCBotError("access_secret is not in config file.")
-        self.access_secret = conf_dic["access_secret"]
-
-        if "test_channel_id" not in conf_dic:
-            raise TCBotError("test_channel_id is not in config file.")
-        self.test_channel_id = conf_dic["test_channel_id"]
-
-        if "db_url" not in conf_dic:
-            raise TCBotError("db_url is not in config file.")
-        self.db_url = conf_dic["db_url"]
-
-        expected_keys = [
-            "test_bot_token",
-            "eval_bot_token",
-            "consumer_key",
-            "consumer_secret",
-            "access_token",
-            "access_secret",
-            "test_channel_id",
-            "db_url",
-        ]
-        for k in conf_dic.keys():
-            if k not in expected_keys:
-                raise TCBotError(f"Invalid parameter is included. param: {k}")
+        # Check invalid parameter exist
+        for key in conf_dic.keys():
+            if key not in EXPECTED_PARAMS:
+                raise TCBotError(f"Invalid parameter is included. param: {key}")
 
 
 def pytest_addoption(parser):

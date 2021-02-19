@@ -212,13 +212,15 @@ class BotClient(discord.Client):
                     await self.send_info(channel_id, text)
         # Receive HELP_CMD
         elif subcmd == HELP_CMD:
-            text = "コマンド仕様:"
-            text += f"\r・{MAIN_CMD} {ADD_CMD} <アカウント名> [<正規表現パターン>]: 収集対象のアカウントを登録"
-            text += f"\r　例: {MAIN_CMD} {ADD_CMD} moujaatumare %s" % repr(r"mildom\.com")
-            text += f"\r　動作: 'mildom.com'を含むなるおのツイートのみ抽出（短縮リンクは展開）"
-            text += f"\r・{MAIN_CMD} {REMOVE_CMD} <アカウント名>: 登録済みのアカウントを削除"
-            text += f"\r・{MAIN_CMD} {LIST_CMD}: 登録済みのアカウントの一覧表示"
-            text += f"\r・{MAIN_CMD} {HELP_CMD}: コマンド仕様を表示"
+            text = (
+                "コマンド仕様:"
+                + f"\r・{MAIN_CMD} {ADD_CMD} <アカウント名> [<正規表現パターン>]: 収集対象のアカウントを登録"
+                + f"\r　例: {MAIN_CMD} {ADD_CMD} moujaatumare %s" % repr(r"mildom\.com")
+                + f"\r　動作: 'mildom.com'を含むなるおのツイートのみ抽出（短縮リンクは展開）"
+                + f"\r・{MAIN_CMD} {REMOVE_CMD} <アカウント名>: 登録済みのアカウントを削除"
+                + f"\r・{MAIN_CMD} {LIST_CMD}: 登録済みのアカウントの一覧表示"
+                + f"\r・{MAIN_CMD} {HELP_CMD}: コマンド仕様を表示"
+            )
             await self.send_info(channel_id, text)
         # Receive invalid command
         else:

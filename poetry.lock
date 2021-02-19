@@ -417,8 +417,8 @@ test = ["mock (>=1.0.1)", "nose (>=1.3.3)", "vcrpy (>=1.10.3)"]
 [package.source]
 type = "git"
 url = "https://github.com/tweepy/tweepy.git"
-reference = "master"
-resolved_reference = "5b2bed89a2f45dec2202cf5b4577d575869fcf26"
+reference = "82fa"
+resolved_reference = "82fa9114364d1d0bd143a85905c156212efdb45f"
 
 [[package]]
 name = "typed-ast"
@@ -472,7 +472,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "7764654ca19f24157f67ed6cf2555d8484ef47f278a558ed153fdbc987ad61db"
+content-hash = "c76b98fb56ffde718942b9a53c74b8544a42c493b4f3b4d163ff856aff28e49f"
 
 [metadata.files]
 aiohttp = [

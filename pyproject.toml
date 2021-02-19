@@ -7,8 +7,8 @@ authors = ["dff9th <dff9th@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.9"
 discord = "^1.0.1"
-tweepy = {git = "https://github.com/tweepy/tweepy.git"}
 psycopg2-binary = "^2.8.6"
+tweepy = {git = "https://github.com/tweepy/tweepy.git", rev = "82fa"}
 
 [tool.poetry.dev-dependencies]
 jedi = "^0.18.0"

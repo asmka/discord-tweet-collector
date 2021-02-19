@@ -9,8 +9,6 @@ from tcbot.twauth import TwitterAuth
 
 from evalcli import eval_send_messages
 
-
-EDAISGOD2525_USER_ID = 1170664739199807488
 TT4BOT_USER_ID = 1359637846919847937
 
 
@@ -57,8 +55,8 @@ class TestBotClient:
         assert eval_send_messages(
             config,
             empty_monitor_db,
-            ["!tc add NON_EXSITING_ACCOUNT_202102211456"],
-            [r"^\[ERROR\] 存在しないアカウントです．アカウント名: NON_EXSITING_ACCOUNT_202102211456$"],
+            ["!tc add NON_EXSITING_ACCOUNT_202102212056"],
+            [r"^\[ERROR\] 存在しないアカウントです．アカウント名: NON_EXSITING_ACCOUNT_202102212056$"],
             5,
         )
 
@@ -81,8 +79,45 @@ class TestBotClient:
             config,
             db,
             ["!tc add tt4bot"],
-            [
-                r"^\[ERROR\] 既に登録されているアカウントです．アカウント名: tt4bot$",
-            ],
+            [r"^\[ERROR\] 既に登録されているアカウントです．アカウント名: tt4bot$"],
+            5,
+        )
+
+    # remove command
+    def test_remove_added_account(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc add tt4bot", "!tc remove tt4bot"],
+            [r"^\[INFO\] アカウントの削除に成功しました．アカウント名: tt4bot$"],
+            5,
+        )
+
+    def test_remove_account_in_db(self, config, empty_monitor_db):
+        db = empty_monitor_db
+        db.insert(config.test_channel_id, TT4BOT_USER_ID, "tt4bot", None)
+        assert eval_send_messages(
+            config,
+            db,
+            ["!tc remove tt4bot"],
+            [r"^\[INFO\] アカウントの削除に成功しました．アカウント名: tt4bot$"],
+            5,
+        )
+
+    def test_remove_non_exist_account(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc remove NON_EXSITING_ACCOUNT_202102212056"],
+            [r"^\[ERROR\] 存在しないアカウントです．アカウント名: NON_EXSITING_ACCOUNT_202102212056$"],
+            5,
+        )
+
+    def test_remove_non_added_account(self, config, empty_monitor_db):
+        assert eval_send_messages(
+            config,
+            empty_monitor_db,
+            ["!tc remove tt4bot"],
+            [r"^\[ERROR\] 登録されていないアカウントです．アカウント名: tt4bot$"],
             5,
         )

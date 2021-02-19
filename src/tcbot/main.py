@@ -24,10 +24,10 @@ def main():
     try:
         config = Config(config_file)
     except TCBotError:
-        logger.exception("[ERROR] Recieve Exception")
-        logger.error("[ERROR] Config file is invalid")
+        logger.exception("Catch Exception")
+        logger.error("Config file is invalid.")
         print(
-            f"[ERROR] Config file is invalid",
+            f"[ERROR] Config file is invalid.",
             file=sys.stderr,
         )
         sys.exit(1)

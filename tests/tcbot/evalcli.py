@@ -92,7 +92,7 @@ def eval_send_messages(
     eval_cli = EvalClient(patterns, loop=loop)
 
     # Run event loop on another thread
-    loop_thread = threading.Thread(target=loop.run_forever)
+    loop_thread = threading.Thread(target=loop.run_forever, name="loop_thread")
     loop_thread.start()
 
     # Run bots on other threads
@@ -135,7 +135,7 @@ def eval_send_messages(
     eval_bot_thread.join()
 
     # Close event loop and thread
-    loop.stop()
+    loop.call_soon_threadsafe(loop.stop)
     loop_thread.join()
     loop.close()
 

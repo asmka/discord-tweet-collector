@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import re
 from typing import List, Dict, Any
 
@@ -26,13 +27,12 @@ class TweetCollectStream(tweepy.Stream):
         )
 
         self.client = client
-        self.monitor_db = monitor_db
         self.loop = loop
         self.thread = None
         self.user_id_map = None
 
-    def resume(self):
-        monitors: Dict[str:Any] = self.monitor_db.select_all()
+        # Create a monitor dictonary searched from twitter id
+        monitors: List[Dict[str:Any]] = monitor_db.select_all()
         user_id_map: Dict[int : List[Dict[str:Any]]] = {}
         for m in monitors:
             tid = m["twitter_id"]
@@ -40,25 +40,11 @@ class TweetCollectStream(tweepy.Stream):
                 user_id_map[tid] = []
             user_id_map[tid].append(m)
 
-        if self.thread:
-            self.disconnect()
-
-        self.thread = self.filter(
-            follow=list(map(str, user_id_map.keys())), threaded=True
-        )
         self.user_id_map = user_id_map
-
-    def disconnect(self):
-        super().disconnect()
-        # Wait stream blocking I/O thread
-        if self.thread:
-            self.thread.join()
-            self.thread = None
 
     def on_status(self, status):
         # Get new tweet
         # For some reason, get tweets of other users
-
         user_id = status.user.id
         if user_id not in self.user_id_map:
             return
@@ -71,15 +57,10 @@ class TweetCollectStream(tweepy.Stream):
         for m in self.user_id_map[user_id]:
             # Not matched
             if m["match_ptn"] and not re.search(m["match_ptn"], expand_text):
-                logger.debug(
-                    "[DEBUG] status.text is not matched with regular expression"
-                )
+                logger.debug("status.text is not matched with regular expression")
                 continue
 
             url = f"https://twitter.com/{status.user.screen_name}/status/{status.id}"
             channel = self.client.get_channel(m["channel_id"])
             future = asyncio.run_coroutine_threadsafe(channel.send(url), self.loop)
             future.result()
-
-    def on_error(self, status):
-        logger.error(status)

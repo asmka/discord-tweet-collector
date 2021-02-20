@@ -3,7 +3,7 @@ from typing import List, Dict
 import psycopg2
 from psycopg2.extras import DictCursor
 
-from tcbot.exception import TCBotError
+from .exception import TCBotError
 
 
 class MonitorDB:

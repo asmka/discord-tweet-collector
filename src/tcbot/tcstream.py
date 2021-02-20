@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import re
+import requests
 from typing import List, Dict, Any
 
 import tweepy
@@ -64,3 +65,16 @@ class TweetCollectStream(tweepy.Stream):
             channel = self.client.get_channel(m["channel_id"])
             future = asyncio.run_coroutine_threadsafe(channel.send(url), self.loop)
             future.result()
+
+    def on_exception(self, exception):
+        # Stream is already disconnected
+        super().on_exception(exception)
+
+        if isinstance(exception, requests.exceptions.ChunkedEncodingError):
+            # Recconect stream because connection is reset by peer
+            logger.debug("Reconnecting stream...")
+            monitor_users = list(map(str, self.user_id_map.keys()))
+            if monitor_users:
+                self.filter(follow=monitor_users, threaded=True)
+        else:
+            logger.error("Catch not expected exception")

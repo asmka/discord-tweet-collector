@@ -1,1 +1,1 @@
-worker: python -m src.twbot.main config.json
+worker: python -m src.tcbot.main config.json

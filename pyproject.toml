@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tcbot"
-version = "0.1.0"
+version = "1.0.0"
 description = ""
 authors = ["dff9th <dff9th@gmail.com>"]
 

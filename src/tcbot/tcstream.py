@@ -75,6 +75,9 @@ class TweetCollectStream(tweepy.Stream):
             logger.debug("Reconnecting stream...")
             monitor_users = list(map(str, self.user_id_map.keys()))
             if monitor_users:
+                # Wait stream is disconnected
+                while self.running:
+                    pass
                 self.filter(follow=monitor_users, threaded=True)
         else:
             logger.error("Catch not expected exception")

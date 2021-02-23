@@ -43,6 +43,15 @@ class TweetCollectStream(tweepy.Stream):
 
         self.user_id_map = user_id_map
 
+    async def _reconnect(self):
+        logger.info("Reconnecting stream...")
+        monitor_users = list(map(str, self.user_id_map.keys()))
+        if monitor_users:
+            # Wait stream is disconnected
+            while self.running:
+                pass
+            self.filter(follow=monitor_users, threaded=True)
+
     def on_status(self, status):
         # Get new tweet
         # For some reason, get tweets of other users
@@ -72,12 +81,6 @@ class TweetCollectStream(tweepy.Stream):
 
         if isinstance(exception, requests.exceptions.ChunkedEncodingError):
             # Recconect stream because connection is reset by peer
-            logger.debug("Reconnecting stream...")
-            monitor_users = list(map(str, self.user_id_map.keys()))
-            if monitor_users:
-                # Wait stream is disconnected
-                while self.running:
-                    pass
-                self.filter(follow=monitor_users, threaded=True)
+            asyncio.run_coroutine_threadsafe(self._reconnect(), self.loop).result()
         else:
             logger.error("Catch not expected exception")

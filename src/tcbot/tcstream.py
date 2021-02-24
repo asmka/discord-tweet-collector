@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import time
 import re
 import requests
 from typing import List, Dict, Any
@@ -44,12 +45,16 @@ class TweetCollectStream(tweepy.Stream):
         self.user_id_map = user_id_map
 
     async def _reconnect(self):
-        logger.info("Reconnecting stream...")
+        logger.error("Reconnecting stream...")
         monitor_users = list(map(str, self.user_id_map.keys()))
         if monitor_users:
             # Wait stream is disconnected
+            count = 0
             while self.running:
-                pass
+                time.sleep(1)
+                count += 1
+                if count % 60 == 0:
+                    logger.error("Passed 1 minute...")
             self.filter(follow=monitor_users, threaded=True)
 
     def on_status(self, status):

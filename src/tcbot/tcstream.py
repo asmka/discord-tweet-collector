@@ -86,6 +86,7 @@ class TweetCollectStream(tweepy.Stream):
 
         if isinstance(exception, requests.exceptions.ChunkedEncodingError):
             # Recconect stream because connection is reset by peer
-            asyncio.run_coroutine_threadsafe(self._reconnect(), self.loop).result()
+            asyncio.run_coroutine_threadsafe(self._reconnect(), self.loop)
+            logger.debug("Runned _recconet() asynchronously")
         else:
             logger.error("Catch not expected exception")

@@ -44,8 +44,7 @@ class TweetCollectStream(tweepy.Stream):
 
         self.user_id_map = user_id_map
 
-    async def _reconnect(self):
-        logger.error("Reconnecting stream...")
+    async def _reconnect(self, timeout_seconds):
         monitor_users = list(map(str, self.user_id_map.keys()))
         if monitor_users:
             # Wait stream is disconnected
@@ -53,8 +52,9 @@ class TweetCollectStream(tweepy.Stream):
             while self.running:
                 time.sleep(1)
                 count += 1
-                if count % 60 == 0:
-                    logger.error("Passed 1 minute...")
+                if count >= timeout_seconds:
+                    logger.error("Reconnection is canceled because timed out.")
+                    return
             self.filter(follow=monitor_users, threaded=True)
 
     def on_status(self, status):
@@ -86,7 +86,7 @@ class TweetCollectStream(tweepy.Stream):
 
         if isinstance(exception, requests.exceptions.ChunkedEncodingError):
             # Recconect stream because connection is reset by peer
-            asyncio.run_coroutine_threadsafe(self._reconnect(), self.loop)
-            logger.debug("Runned _recconet() asynchronously")
+            logger.info("Running _recconect() asynchronously.")
+            asyncio.run_coroutine_threadsafe(self._reconnect(60), self.loop)
         else:
             logger.error("Catch not expected exception")
